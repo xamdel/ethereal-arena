@@ -1,5 +1,6 @@
 import React from 'react';
-import styles from '../../styles/Arena.module.css';
+import styles from '../../../styles/Arena.module.css';
+import HealthEnergyDisplay from './HealthEnergyDisplay';
 
 const Arena = () => {
     return (
@@ -10,7 +11,9 @@ const Arena = () => {
                     <div className={styles.opponentHand}>Opponent's hand</div>
                     <div className={styles.status}>
                         <div className={styles.debuffs}>Opponent Debuffs</div>
-                        <div className={styles.hpEnergy}>Opponent HP/Energy</div>
+                        <div className={styles.hpEnergy}>
+                            <HealthEnergyDisplay isPlayer2={true}/>
+                        </div>
                         <div className={styles.buffs}>Opponent Buffs</div>
                     </div>
                 </div>
@@ -20,7 +23,9 @@ const Arena = () => {
                 <div className={styles.playerArea}>
                     <div className={styles.status}>
                         <div className={styles.debuffs}>Player Debuffs</div>
-                        <div className={styles.hpEnergy}>Player HP/Energy</div>
+                        <div className={styles.hpEnergy}>
+                            <HealthEnergyDisplay />
+                        </div>
                         <div className={styles.buffs}>Player Buffs</div>
                     </div>
                     <div className={styles.playerHand}>Player's hand</div>

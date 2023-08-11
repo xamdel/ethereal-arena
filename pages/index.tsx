@@ -1,4 +1,4 @@
-import Arena from "../components/HUD/Arena";
+import Arena from "../src/components/HUD/Arena";
 
 export default function Home() {
   return (

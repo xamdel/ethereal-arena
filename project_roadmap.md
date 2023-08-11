@@ -16,22 +16,22 @@
 
 ### Task 1.3: Create Basic UI Components
 - [x] 1.3.1: Design HUD layout
-- [] 1.3.2: Create main HUD structure
-    [] Arena container
-    [] Combat log
-    [] Opponent area
-        [] hand
-        [] status
-            [] debuffs
-            [] HP/Energy
-            [] buffs
-    [] Card drop area
-    [] Player area
-    [] hand
-        [] status
-            [] debuffs
-            [] HP/Energy
-            [] buffs
+- [x] 1.3.2: Create main HUD structure
+    [x] Arena container
+    [x] Combat log
+    [x] Opponent area
+        [x] hand
+        [x] status
+            [x] debuffs
+            [x] HP/Energy
+            [x] buffs
+    [x] Card drop area
+    [x] Player area
+    [x] hand
+        [x] status
+            [x] debuffs
+            [x] HP/Energy
+            [x] buffs
 - [] 1.3.3: Create player health & energy display component
 - [] 1.3.4: Create hand display component
 - [] 1.3.5: Create card component
