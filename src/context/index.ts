@@ -1,13 +1,30 @@
 import React from "react";
-import { Health, Energy, Buff, Debuff } from "../models";
+import { Health, Energy, Buff, Debuff, PlayerState } from "../models";
 
-// Define initial health values for players
+// Define initial values for players
 const initialHealth: Health = {
-    current: 50,
-    max: 50,
-}
+  current: 50,
+  max: 50,
+};
+
+const initialEnergy: Energy = {
+  current: 5,
+  max: 5,
+};
+
+const initialBuffs: Buff[] = [];
+
+const initialDebuffs: Debuff[] = [];
+
+const initialPlayerState: PlayerState = {
+  health: initialHealth,
+  energy: initialEnergy,
+  buffs: initialBuffs,
+  debuffs: initialDebuffs,
+};
 
 // Create the game state context
 export const GameStateContext = React.createContext({
-    health: initialHealth,
-})
+  player1: initialPlayerState,
+  player2: initialPlayerState,
+});

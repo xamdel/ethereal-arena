@@ -12,7 +12,7 @@
 - [x] 1.2.2: Define energy schema in game state
 - [x] 1.2.3: Define buffs schema in game state
 - [x] 1.2.4: Define debuffs schema in game state
-- [] 1.2.5: Implement state management (React Context/Redux)
+- [x] 1.2.5: Implement state management (React Context/Redux)
 
 ### Task 1.3: Create Basic UI Components
 - [] 1.3.1: Design HUD layout

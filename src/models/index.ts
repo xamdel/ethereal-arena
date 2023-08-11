@@ -19,3 +19,10 @@ export interface Debuff {
   duration: number;
   effect: string;
 }
+
+export interface PlayerState {
+  health: Health;
+  energy: Energy;
+  buffs: Buff[];
+  debuffs: Debuff[];
+}
