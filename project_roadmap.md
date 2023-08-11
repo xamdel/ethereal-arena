@@ -15,9 +15,28 @@
 - [x] 1.2.5: Implement state management (React Context/Redux)
 
 ### Task 1.3: Create Basic UI Components
-- [] 1.3.1: Design HUD layout
-- [] 1.3.2: Implement combat log component
-- [] 1.3.3: Create card display component
+- [x] 1.3.1: Design HUD layout
+- [] 1.3.2: Create main HUD structure
+    [] Arena container
+    [] Combat log
+    [] Opponent area
+        [] hand
+        [] status
+            [] debuffs
+            [] HP/Energy
+            [] buffs
+    [] Card drop area
+    [] Player area
+    [] hand
+        [] status
+            [] debuffs
+            [] HP/Energy
+            [] buffs
+- [] 1.3.3: Create player health & energy display component
+- [] 1.3.4: Create hand display component
+- [] 1.3.5: Create card component
+- [] 1.3.6: Create combat log component
+- [] 1.3.7: Create card drop area component
 
 ## Milestone 2: AI Integration and Card Generation
 

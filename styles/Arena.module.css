@@ -1,0 +1,69 @@
+.arenaContainer,
+.combatLog,
+.battleHud,
+.opponentArea,
+.cardDropArea,
+.playerArea,
+.opponentHand,
+.playerHand,
+.status,
+.debuffs,
+.hpEnergy,
+.buffs {
+  border: 1px solid hotpink;
+}
+
+.leftSpace {
+    width: 25%;
+    height: 100%;
+  }
+
+.arenaContainer {
+  display: flex;
+  flex-direction: row;
+  width: 100%;
+  height: 100%;
+}
+
+.combatLog {
+  width: 25%;
+  height: 100%;
+  overflow-y: scroll;
+}
+
+.battleHud {
+  width: 50%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+}
+
+.opponentArea,
+.playerArea {
+  display: flex;
+  height: 70%;
+  flex-direction: column;
+}
+
+.playerArea {
+    justify-content: flex-end;
+}
+
+.opponentHand,
+.playerHand {
+    height: 50%;
+}
+
+.cardDropArea {
+  display: flex;
+  height: 100%;
+  justify-content: center;
+  align-items: center;
+}
+
+.status {
+  display: flex;
+  flex-direction: row;
+  justify-content: center;
+}
