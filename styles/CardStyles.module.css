@@ -1,0 +1,38 @@
+.card {
+  border: 1px solid deepskyblue;
+  width: 80%;
+  max-width: 200px;
+  margin: 0.5rem auto;
+  padding: 0.5rem;
+  border: 1px solid transparent;
+  background-color: #f9f9f9;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+}
+
+.cardHeader {
+  display: flex;
+  justify-content: space-between;
+  padding: 0.5rem;
+  border-bottom: 1px solid #ccc;
+}
+
+.cardBody {
+  padding: 0.5rem;
+}
+
+.cardEffect,
+.cardName,
+.cardEnergyCost {
+  margin: 5px;
+}
+
+.cardBack {
+  border: 1px solid deepskyblue;
+  width: 80%;
+  max-width: 200px;
+  margin: 0.5rem auto;
+  padding: 0.5rem;
+  background-color: #ccc;
+}

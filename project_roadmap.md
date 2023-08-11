@@ -32,9 +32,9 @@
             [x] debuffs
             [x] HP/Energy
             [x] buffs
-- [] 1.3.3: Create player health & energy display component
-- [] 1.3.4: Create hand display component
-- [] 1.3.5: Create card component
+- [x] 1.3.3: Create player health & energy display component
+- [x] 1.3.4: Create card component
+- [] 1.3.5: Create hand display component
 - [] 1.3.6: Create combat log component
 - [] 1.3.7: Create card drop area component
 

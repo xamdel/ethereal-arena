@@ -26,3 +26,9 @@ export interface PlayerState {
   buffs: Buff[];
   debuffs: Debuff[];
 }
+
+export interface Card {
+  name: string;
+  effect: string;
+  energyCost: string;
+}
