@@ -1,20 +1,20 @@
-interface Health {
+export interface Health {
   current: number;
   max: number;
 }
 
-interface Energy {
+export interface Energy {
   current: number;
   max: number;
 }
 
-interface Buff {
+export interface Buff {
   type: string;
   duration: number;
   effect: string;
 }
 
-interface Debuff {
+export interface Debuff {
   type: string;
   duration: number;
   effect: string;
