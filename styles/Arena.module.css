@@ -55,6 +55,20 @@
     height: 50%;
 }
 
+.handDisplay {
+  display: flex;
+  width: 100%;
+  position: absolute;
+}
+
+.player1Hand {
+  bottom: -25%;
+}
+
+.player2Hand {
+  top: -25%;
+}
+
 .cardDropArea {
   display: flex;
   height: 100%;
