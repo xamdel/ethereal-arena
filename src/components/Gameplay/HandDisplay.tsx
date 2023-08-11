@@ -1,7 +1,7 @@
 import React from 'react';
 import styles from '../../../styles/Arena.module.css'
 import { Card as CardModel } from '../../models';
-import Card from '../Card'
+import Card from './Card'
 
 interface HandDisplayProps {
   cards: CardModel[];

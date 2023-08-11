@@ -1,6 +1,6 @@
 import React from 'react';
 import styles from '../../../styles/Arena.module.css';
-import HealthEnergyDisplay from './HealthEnergyDisplay';
+import HealthEnergyDisplay from './HUD/HealthEnergyDisplay';
 
 const Arena = () => {
     return (
@@ -17,7 +17,7 @@ const Arena = () => {
                         <div className={styles.buffs}>Opponent Buffs</div>
                     </div>
                 </div>
-                <div className={styles.cardDropArea}>
+                <div className={styles.cardDropAreaContainer}>
                     Card drop area
                 </div>
                 <div className={styles.playerArea}>

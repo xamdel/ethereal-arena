@@ -69,7 +69,7 @@
   top: -25%;
 }
 
-.cardDropArea {
+.cardDropAreaContainer {
   display: flex;
   height: 100%;
   justify-content: center;

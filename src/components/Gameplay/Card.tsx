@@ -1,6 +1,6 @@
 import React from 'react';
 import styles from '../../styles/CardStyles.module.css'
-import { Card as CardModel } from '../models'
+import { Card as CardModel } from '../../models'
 
 interface CardProps {
     card: CardModel;
