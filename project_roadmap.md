@@ -42,13 +42,15 @@
 
 ### Task 2.1: Game Logic
 - [x] 2.2.1: Create game context provider
-    [] Functions for updating game state
+    [x] Functions for updating game state
         [x] Player turn
         [x] Player hand
         [x] Health, energy, buffs, debuffs
 - [] 2.2.2: Implement turn logic
     [x] Implement turn cycle
     [] Call card generation
+        [] on turn end
+        [] on game start
     [x] End turn button
 - [] 2.2.3: Implement card playing logic
     [] Card dropping functionality
@@ -64,7 +66,7 @@
 ### Task 2.2: Card Generation
 - [] 2.2.1: Create card generation prompt
 - [] 2.2.2: Create function calling schema
-- [] 2.2.3: Create function for calling OpenAI endpoint, inserting prompt
+- [x] 2.2.3: Create function for calling OpenAI endpoint, inserting prompt
 
 ### Task 2.3: Develop Game Logic Interpreter
 - [] 2.3.1: Design interpreter structure
