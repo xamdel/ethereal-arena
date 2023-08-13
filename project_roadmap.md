@@ -41,15 +41,15 @@
 ## Milestone 2: AI Integration and Card Generation
 
 ### Task 2.1: Game Logic
-- [] 2.2.1: Create game context provider
+- [x] 2.2.1: Create game context provider
     [] Functions for updating game state
-        [] Player turn
+        [x] Player turn
         [] Player hand
         [] Health, energy, buffs, debuffs
 - [] 2.2.2: Implement turn logic
-    [] Implement turn cycle
+    [x] Implement turn cycle
     [] Call card generation
-    [] End turn button
+    [x] End turn button
 - [] 2.2.3: Implement card playing logic
     [] Card dropping functionality
     [] Game logic interpreter placeholder call

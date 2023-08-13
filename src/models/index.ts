@@ -25,6 +25,7 @@ export interface PlayerState {
   energy: Energy;
   buffs: Buff[];
   debuffs: Debuff[];
+  hand: Hand;
 }
 
 export interface Card {
@@ -32,3 +33,5 @@ export interface Card {
   effect: string;
   energyCost: string;
 }
+
+export type Hand = Card[];
