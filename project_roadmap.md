@@ -44,8 +44,8 @@
 - [x] 2.2.1: Create game context provider
     [] Functions for updating game state
         [x] Player turn
-        [] Player hand
-        [] Health, energy, buffs, debuffs
+        [x] Player hand
+        [x] Health, energy, buffs, debuffs
 - [] 2.2.2: Implement turn logic
     [x] Implement turn cycle
     [] Call card generation

@@ -1,13 +1,13 @@
-import React, { useState } from "react";
-import { Health, Energy, Buff, Debuff, PlayerState, Hand, Card } from "../models";
+import React from "react";
+import { Health, Energy, Buff, Debuff, PlayerState, Hand, Card, Player } from "../models";
 
 // Define game state type
 export interface GameState {
   player1: PlayerState;
   player2: PlayerState;
   turn?: string;
-  addCardToHand?: (player: 'player1' | 'player2', card: Card) => void;
-  removeCardFromHand?: (player: 'player1' | 'player2', cardIndex: number) => void;
+  addCardToHand?: (player: Player, card: Card) => void;
+  removeCardFromHand?: (player: Player, cardIndex: number) => void;
 }
 
 // Define initial values for players

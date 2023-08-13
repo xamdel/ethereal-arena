@@ -35,3 +35,5 @@ export interface Card {
 }
 
 export type Hand = Card[];
+
+export type Player = 'player1' | 'player2';
