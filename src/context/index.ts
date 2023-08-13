@@ -5,7 +5,7 @@ import { Health, Energy, Buff, Debuff, PlayerState } from "../models";
 export interface GameState {
   player1: PlayerState;
   player2: PlayerState;
-  currenTurn?: string;
+  turn?: string;
 }
 
 // Define initial values for players
@@ -34,4 +34,5 @@ export const initialPlayerState: PlayerState = {
 export const GameStateContext = React.createContext<GameState>({
   player1: initialPlayerState,
   player2: initialPlayerState,
+  turn: 'player1'
 });
