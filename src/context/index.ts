@@ -1,5 +1,12 @@
-import React from "react";
+import React, { useState } from "react";
 import { Health, Energy, Buff, Debuff, PlayerState } from "../models";
+
+// Define game state type
+export interface GameState {
+  player1: PlayerState;
+  player2: PlayerState;
+  currenTurn?: string;
+}
 
 // Define initial values for players
 const initialHealth: Health = {
@@ -16,7 +23,7 @@ const initialBuffs: Buff[] = [];
 
 const initialDebuffs: Debuff[] = [];
 
-const initialPlayerState: PlayerState = {
+export const initialPlayerState: PlayerState = {
   health: initialHealth,
   energy: initialEnergy,
   buffs: initialBuffs,
@@ -24,7 +31,7 @@ const initialPlayerState: PlayerState = {
 };
 
 // Create the game state context
-export const GameStateContext = React.createContext({
+export const GameStateContext = React.createContext<GameState>({
   player1: initialPlayerState,
   player2: initialPlayerState,
 });

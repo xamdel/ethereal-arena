@@ -36,20 +36,37 @@
 - [x] 1.3.4: Create card component
 - [x] 1.3.5: Create hand display component
 - [x] 1.3.6: Create combat log component
-- [] 1.3.7: Create card drop area component
+- [x] 1.3.7: Create card drop area component
 
 ## Milestone 2: AI Integration and Card Generation
 
-### Task 2.1: Implement Card Generation Logic
-- [] 2.1.1: Define card schema
-- [] 2.1.2: Implement basic card generation logic
-- [] 2.1.3: Integrate OpenAI model for creative card generation
+### Task 2.1: Game Logic
+- [] 2.2.1: Create game context provider
+    [] Functions for updating game state
+        [] Player turn
+        [] Player hand
+        [] Health, energy, buffs, debuffs
+- [] 2.2.2: Implement turn logic
+    [] Implement turn cycle
+    [] Call card generation
+    [] End turn button
+- [] 2.2.3: Implement card playing logic
+    [] Card dropping functionality
+    [] Game logic interpreter placeholder call
+- [] 2.2.4: Implement Combat Log update
+    [] Define combat log entry schema
+    [] Function to add log entry
+- [] 2.2.5: Implement Game Over logic
+    [] Define win/lose conditions
+    [] Create game over screen / message
+- [] 2.2.6: Integrate with existing components
 
-### Task 2.2: Develop Game Logic Interpreter
-- [] 2.2.1: Design interpreter structure
-- [] 2.2.2: Implement core interpreter functionality
-- [] 2.2.3: Integrate OpenAI model for card interpretation
+### Task 2.2: Card Generation
+- [] 2.2.1: Create card generation prompt
+- [] 2.2.2: Create function calling schema
+- [] 2.2.3: Create function for calling OpenAI endpoint, inserting prompt
 
-### Task 2.3: Implement AI Opponent
-- [] 2.3.1: Design AI opponent logic
-- [] 2.3.2: Integrate OpenAI model for AI opponent decision-making
+### Task 2.3: Develop Game Logic Interpreter
+- [] 2.3.1: Design interpreter structure
+- [] 2.3.2: Implement core interpreter functionality
+- [] 2.3.3: Integrate OpenAI model for card interpretation

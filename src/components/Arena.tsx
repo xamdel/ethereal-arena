@@ -1,5 +1,5 @@
 import React from 'react';
-import styles from '../../../styles/Arena.module.css';
+import styles from '../../styles/Arena.module.css';
 import HealthEnergyDisplay from './HUD/HealthEnergyDisplay';
 
 const Arena = () => {
