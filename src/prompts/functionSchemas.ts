@@ -2,14 +2,12 @@
 const functionSchemas = {
   generate_hand :{
     name: "generate_hand",
-    description: "Generate a hand of 5 cards",
+    description: "Generate a hand of exactly 5 cards",
     parameters: {
       type: "object",
       properties: {
         cards: {
           type: "array",
-          minItems: 5,
-          maxItems: 5,
           items: {
             type: "object",
             properties: {

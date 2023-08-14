@@ -12,14 +12,26 @@ const getFunctionsArray = (names: string[]): ChatCompletionFunctions[] => {
 export async function generateHand(): Promise<Card[]> {
   const requiredFunctions = ["generate_hand"];
   const functionsArray = getFunctionsArray(requiredFunctions);
-  const response = await callChatCompletion(handGenerationPrompt, functionsArray, { "name": "generate_hand" });
 
-  const cardsJSON = response.message?.function_call?.arguments;
+  const maxRetries = 3;
+  let retries = 0;
 
-  if (!cardsJSON) {
-    throw new Error("Failed to generate cards");
+  while (retries < maxRetries) {
+    const response = await callChatCompletion(handGenerationPrompt, functionsArray, { "name": "generate_hand" });
+    const cardsJSON = response.message?.function_call?.arguments;
+
+    if (!cardsJSON) {
+      throw new Error("Failed to generate cards");
+    }
+
+    const cardsObject = JSON.parse(cardsJSON);
+
+    if (cardsObject.cards.length >= 5) {
+      return cardsObject.cards.slice(0, 5);
+    }
+
+    retries++;
   }
 
-  const cardsObject = JSON.parse(cardsJSON);
-  return cardsObject.cards;
-}  
+  throw new Error("Failed to generate a valid hand after multiple attempts");
+}
