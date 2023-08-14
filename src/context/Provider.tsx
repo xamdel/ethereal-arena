@@ -42,10 +42,18 @@ export const GameStateProvider: React.FC<GameStateProviderProps> = ({ children }
         }
       }, [playerReady]);
 
-    const endTurn = () => {
+    const endTurn = async () => {
+        const nextPlayer = gameState.turn === 'player1' ? 'player2' : 'player1';
+
+        const newHand = await generateHand();
+
         setGameState((prev) => ({
             ...prev,
-            turn: prev.turn === 'player1' ? 'player2' : 'player1',
+            turn: nextPlayer,
+            [nextPlayer]: {
+                ...prev[nextPlayer],
+                hand: newHand,
+            }
         }));
     };
 

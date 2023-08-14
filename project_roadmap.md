@@ -48,8 +48,8 @@
         [x] Health, energy, buffs, debuffs
 - [] 2.2.2: Implement turn logic
     [x] Implement turn cycle
-    [] Call card generation
-        [] on turn end
+    [x] Call card generation
+        [x] on turn end
         [x] on game start
     [x] End turn button
 - [] 2.2.3: Implement card playing logic
