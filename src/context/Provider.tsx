@@ -17,12 +17,6 @@ export const useGameState = () => {
 };
 
 export const GameStateProvider: React.FC<GameStateProviderProps> = ({ children }) => {
-    const [gameState, setGameState] = useState<GameState>({
-        player1: initialPlayerState,
-        player2: initialPlayerState,
-        turn: 'player1',
-    });
-
     const [playerReady, setPlayerReady] = useState({ player1: false, player2: false });
 
     const handlePlayerReady = (player: 'player1' | 'player2') => {
@@ -109,13 +103,19 @@ export const GameStateProvider: React.FC<GameStateProviderProps> = ({ children }
         updatePlayerState(player, { debuffs: gameState[player].debuffs.filter((_, index) => index !== debuffIndex) });
     };
 
+    const [gameState, setGameState] = useState<GameState>({
+        player1: initialPlayerState,
+        player2: initialPlayerState,
+        turn: 'player1',
+        handlePlayerReady,
+        endTurn,
+        addCardToHand,
+        removeCardFromHand,
+    });
+
     return (
         <GameStateContext.Provider value={{ ...gameState, addCardToHand, removeCardFromHand }}>
             {children}
-            <p>${gameState.turn}</p>
-            <button onClick={endTurn}>End Turn</button>
-            <button onClick={() => handlePlayerReady('player1')}>Player 1 Ready</button>
-            <button onClick={() => handlePlayerReady('player2')}>Player 2 Ready</button>
         </GameStateContext.Provider>
     )
 }

@@ -6,6 +6,8 @@ export interface GameState {
   player1: PlayerState;
   player2: PlayerState;
   turn?: string;
+  endTurn: () => void;
+  handlePlayerReady: (player: 'player1' | 'player2') => void;
   addCardToHand?: (player: Player, card: Card) => void;
   removeCardFromHand?: (player: Player, cardIndex: number) => void;
 }
