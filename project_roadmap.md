@@ -50,7 +50,7 @@
     [x] Implement turn cycle
     [] Call card generation
         [] on turn end
-        [] on game start
+        [x] on game start
     [x] End turn button
 - [] 2.2.3: Implement card playing logic
     [] Card dropping functionality
@@ -64,7 +64,7 @@
 - [] 2.2.6: Integrate with existing components
 
 ### Task 2.2: Card Generation
-- [x] 2.2.1: Create card generation prompt
+- [] 2.2.1: Create card generation prompt
 - [x] 2.2.2: Create function calling schema
 - [x] 2.2.3: Create function for calling OpenAI endpoint, inserting prompt
 

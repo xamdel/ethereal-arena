@@ -1,11 +1,13 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { GameState, GameStateContext, initialPlayerState } from ".";
 import { Buff, Card, Debuff, Player, PlayerState } from "../models";
+import { generateHand } from "../utils";
 
 interface GameStateProviderProps {
     children: React.ReactNode;
 }
 
+// Custom hook for consuming game state context
 export const useGameState = () => {
     const context = React.useContext(GameStateContext);
     if (!context) {
@@ -21,12 +23,24 @@ export const GameStateProvider: React.FC<GameStateProviderProps> = ({ children }
         turn: 'player1',
     });
 
-    const updatePlayerState = (player: 'player1' | 'player2', updates: Partial<PlayerState>) => {
-        setGameState((prev) => ({
-            ...prev,
-            [player]: { ...prev[player], ...updates },
-        }));
+    const [playerReady, setPlayerReady] = useState({ player1: false, player2: false });
+
+    const handlePlayerReady = (player: 'player1' | 'player2') => {
+        setPlayerReady(prev => ({ ...prev, [player]: true }));
     };
+
+    // Generate intial hands when both players click ready
+    useEffect(() => {
+        if (playerReady.player1 && playerReady.player2) {
+          Promise.all([generateHand(), generateHand()]).then(([hand1, hand2]) => {
+            setGameState(prev => ({
+              ...prev,
+              player1: { ...prev.player1, hand: hand1 },
+              player2: { ...prev.player2, hand: hand2 },
+            }));
+          });
+        }
+      }, [playerReady]);
 
     const endTurn = () => {
         setGameState((prev) => ({
@@ -35,19 +49,25 @@ export const GameStateProvider: React.FC<GameStateProviderProps> = ({ children }
         }));
     };
 
-    const addCardToHand = (player: Player, card: Card) => {
+    // HOF for updating aspects of player state
+    const updatePlayerState = (player: 'player1' | 'player2', updates: Partial<PlayerState>) => {
         setGameState((prev) => ({
             ...prev,
-            [player]: { ...prev[player], hand: [...prev[player].hand, card] },
+            [player]: { ...prev[player], ...updates },
         }));
     };
 
-    const removeCardFromHand = (player: Player, cardIndex: number) => {
-        setGameState((prev) => ({
-            ...prev,
-            [player]: { ...prev[player], hand: prev[player].hand.filter((_, index) => index !== cardIndex) },
-        }));
+    const addCardToHand = (player: 'player1' | 'player2', card: Card) => {
+        updatePlayerState(player, {
+            hand: [...gameState[player].hand, card],
+        });
     };
+    
+    const removeCardFromHand = (player: 'player1' | 'player2', cardIndex: number) => {
+        updatePlayerState(player, {
+            hand: gameState[player].hand.filter((_, index) => index !== cardIndex),
+        });
+    };    
 
     const addHealth = (player: 'player1' | 'player2', amount: number) => {
         updatePlayerState(player, { health: { ...gameState[player].health, current: gameState[player].health.current + amount } });
@@ -86,6 +106,8 @@ export const GameStateProvider: React.FC<GameStateProviderProps> = ({ children }
             {children}
             <p>${gameState.turn}</p>
             <button onClick={endTurn}>End Turn</button>
+            <button onClick={() => handlePlayerReady('player1')}>Player 1 Ready</button>
+            <button onClick={() => handlePlayerReady('player2')}>Player 2 Ready</button>
         </GameStateContext.Provider>
     )
 }
