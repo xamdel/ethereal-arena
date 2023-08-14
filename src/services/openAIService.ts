@@ -7,14 +7,19 @@ const configuration = new Configuration({
 const openai = new OpenAIApi(configuration);
 
 export const callChatCompletion = async (
-    messages: CreateChatCompletionRequest["messages"],
+    message: string,
     functions?: CreateChatCompletionRequest["functions"],
     function_call?: CreateChatCompletionRequest["function_call"]
 ) => {
   try {
     const completion = await openai.createChatCompletion({
       model: "gpt-3.5-turbo",
-      messages,
+      messages: [
+        {
+            role: "system",
+            content: message,
+        }
+      ],
       functions,
       function_call,
     });
