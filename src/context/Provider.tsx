@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { GameState, GameStateContext, initialPlayerState } from ".";
 import { Buff, Card, Debuff, Player, PlayerState } from "../models";
 import { generateHand } from "../utils";
@@ -36,20 +36,18 @@ export const GameStateProvider: React.FC<GameStateProviderProps> = ({ children }
         }
       }, [playerReady]);
 
-    const endTurn = async () => {
-        const nextPlayer = gameState.turn === 'player1' ? 'player2' : 'player1';
-
-        const newHand = await generateHand();
-
-        setGameState((prev) => ({
+      const endTurn = () => {
+        setGameState(prev => {
+          const nextPlayer = prev.turn === 'player1' ? 'player2' : 'player1';
+      
+          return {
             ...prev,
             turn: nextPlayer,
-            [nextPlayer]: {
-                ...prev[nextPlayer],
-                hand: newHand,
-            }
-        }));
-    };
+            turnNumber: prev.turnNumber + 1,
+          };
+        });
+      };
+      
 
     // HOF for updating aspects of player state
     const updatePlayerState = (player: 'player1' | 'player2', updates: Partial<PlayerState>) => {
@@ -107,11 +105,34 @@ export const GameStateProvider: React.FC<GameStateProviderProps> = ({ children }
         player1: initialPlayerState,
         player2: initialPlayerState,
         turn: 'player1',
+        turnNumber: 1,
         handlePlayerReady,
         endTurn,
         addCardToHand,
         removeCardFromHand,
     });
+
+    // Generate hand for other player when current player ends turn
+    useEffect(() => {
+        if (gameState.turnNumber === 1) return;
+      
+        const generateNewHand = async () => {
+            try {
+              const newHand = await generateHand();
+              setGameState(prev => ({
+                ...prev,
+                [gameState.turn as 'player1' | 'player2']: {
+                  ...prev[gameState.turn as 'player1' | 'player2'],
+                  hand: newHand,
+                }
+              }));
+            } catch (error) {
+              console.error("Error generating new hand:", error);
+            }
+          };
+        
+          generateNewHand();
+      }, [gameState.turn]);
 
     return (
         <GameStateContext.Provider value={{ ...gameState, addCardToHand, removeCardFromHand }}>

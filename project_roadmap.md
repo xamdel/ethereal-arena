@@ -51,6 +51,7 @@
     [x] Call card generation
         [x] on turn end
         [x] on game start
+        [] change generation for turn 2 - either generate cards only for the first player for turn 1, or block regeneration of the second player's hand when the first turn ends
     [x] End turn button
 - [] 2.2.3: Implement card playing logic
     [] Card dropping functionality

@@ -5,12 +5,13 @@ import { useGameState } from '../context/Provider';
 import HandDisplay from './Gameplay/HandDisplay';
 
 const Arena = () => {
-    const { player1, player2, turn, endTurn, handlePlayerReady } = useGameState();
+    const { player1, player2, turn, turnNumber, endTurn, handlePlayerReady } = useGameState();
 
     return (
         <div className={styles.arenaContainer}>
             <div className={styles.leftSpace}>
-                <p>Turn: {turn}</p>
+                <p>Turn: {turn}</p>    
+                <p>Turn number: {turnNumber}</p>    
                 <button onClick={endTurn}>End Turn</button>
                 <button onClick={() => handlePlayerReady('player1')}>Player 1 Ready</button>
                 <button onClick={() => handlePlayerReady('player2')}>Player 2 Ready</button>
