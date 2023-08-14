@@ -46,7 +46,7 @@
         [x] Player turn
         [x] Player hand
         [x] Health, energy, buffs, debuffs
-- [] 2.2.2: Implement turn logic
+- [x] 2.2.2: Implement turn logic
     [x] Implement turn cycle
     [x] Call card generation
         [x] on turn end

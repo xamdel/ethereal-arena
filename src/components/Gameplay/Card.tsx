@@ -1,5 +1,5 @@
 import React from 'react';
-import styles from '../../styles/CardStyles.module.css'
+import styles from '../../../styles/CardStyles.module.css'
 import { Card as CardModel } from '../../models'
 
 interface CardProps {
@@ -8,9 +8,9 @@ interface CardProps {
 }
 
 const Card: React.FC<CardProps> = ({ card, isPlayer2 = false }) => {
-    if (isPlayer2) {
-        return <div className={styles.cardBack}></div>;
-    }
+    // if (isPlayer2) {
+    //     return <div className={styles.cardBack}></div>;
+    // }
 
     return (
         <div className={styles.card}>

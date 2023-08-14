@@ -53,6 +53,8 @@
 .opponentHand,
 .playerHand {
     height: 50%;
+    position: relative;
+    overflow: hidden;
 }
 
 .handDisplay {
@@ -65,9 +67,9 @@
   bottom: -25%;
 }
 
-.player2Hand {
+/* .player2Hand {
   top: -25%;
-}
+} */
 
 .cardDropAreaContainer {
   display: flex;
