@@ -51,6 +51,13 @@ export const GameStateProvider: React.FC<GameStateProviderProps> = ({ children }
         });
     };
 
+    const addCombatLogEntry = (entry: CombatLogEntry) => {
+        setGameState(prev => ({
+            ...prev,
+            combatLog: [...prev.combatLog, entry]
+        }));
+    };
+
     // HOF for updating aspects of player state
     const updatePlayerState = (player: 'player1' | 'player2', updates: Partial<PlayerState>) => {
         setGameState((prev) => ({
@@ -109,6 +116,7 @@ export const GameStateProvider: React.FC<GameStateProviderProps> = ({ children }
         turn: undefined,
         turnNumber: 1,
         combatLog,
+        addCombatLogEntry,
         handlePlayerReady,
         endTurn,
         addCardToHand,

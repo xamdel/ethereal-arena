@@ -56,7 +56,7 @@
 - [] 2.2.3: Implement Combat Log update
     [x] Define combat log entry schema
     [x] Combat log state variable
-    [] Function to add log entry
+    [x] Function to add log entry
 - [] 2.2.4: Implement card playing logic
     [] Card dropping functionality
     [] Game logic interpreter placeholder call
