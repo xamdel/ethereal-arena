@@ -3,9 +3,10 @@ import styles from '../../styles/Arena.module.css';
 import HealthEnergyDisplay from './HUD/HealthEnergyDisplay';
 import { useGameState } from '../context/Provider';
 import HandDisplay from './Gameplay/HandDisplay';
+import CombatLog from './CombatLog';
 
 const Arena = () => {
-    const { player1, player2, turn, turnNumber, endTurn, handlePlayerReady } = useGameState();
+    const { player1, player2, turn, turnNumber, combatLog, endTurn, handlePlayerReady } = useGameState();
 
     return (
         <div className={styles.arenaContainer}>
@@ -46,7 +47,7 @@ const Arena = () => {
                 </div>
             </div>
             <div className={styles.combatLog}>
-                Combat Log
+                <CombatLog log={combatLog}/>
             </div>
         </div>
     );

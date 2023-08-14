@@ -27,7 +27,11 @@ export const GameStateProvider: React.FC<GameStateProviderProps> = ({ children }
     // Randomly choose starting player and generate initial hand when both players click ready
     useEffect(() => {
         if (playerReady.player1 && playerReady.player2) {
+            addCombatLogEntry('System', 'Both players ready. Starting match...')
+            addCombatLogEntry('System', 'Rolling for first turn...')
+
             const startingPlayer = Math.random() < 0.5 ? 'player1' : 'player2';
+            addCombatLogEntry('System', `${startingPlayer} goes first. Generating starting hand...`)
 
             generateHand().then(hand => {
                 setGameState(prev => ({
@@ -41,6 +45,7 @@ export const GameStateProvider: React.FC<GameStateProviderProps> = ({ children }
 
     const endTurn = () => {
         setGameState(prev => {
+            addCombatLogEntry('System', `${prev.turn} ended their turn.`)
             const nextPlayer = prev.turn === 'player1' ? 'player2' : 'player1';
 
             return {
@@ -51,12 +56,12 @@ export const GameStateProvider: React.FC<GameStateProviderProps> = ({ children }
         });
     };
 
-    const addCombatLogEntry = (entry: CombatLogEntry) => {
-        setGameState(prev => ({
-            ...prev,
-            combatLog: [...prev.combatLog, entry]
-        }));
-    };
+    const addCombatLogEntry = (category: 'System' | 'Player Action', details: string | object, player?: 'player1' | 'player2') => {
+        const timestamp = new Date();
+        const entry: CombatLogEntry = { timestamp, category, details, player };
+      
+        setCombatLog(prev => [...prev, entry]);
+    };      
 
     // HOF for updating aspects of player state
     const updatePlayerState = (player: 'player1' | 'player2', updates: Partial<PlayerState>) => {
@@ -126,6 +131,8 @@ export const GameStateProvider: React.FC<GameStateProviderProps> = ({ children }
     // Generate hand for other player when current player ends turn
     useEffect(() => {
         if (gameState.turnNumber === 1) return;
+
+        addCombatLogEntry('System', `Generating cards...`)
 
         const generateNewHand = async () => {
             try {

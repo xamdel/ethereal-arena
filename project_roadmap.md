@@ -57,6 +57,10 @@
     [x] Define combat log entry schema
     [x] Combat log state variable
     [x] Function to add log entry
+    [] Call function inside existing event logic
+        [] When deciding who goes first
+        [] When generating cards
+        [] When player ends their turn
 - [] 2.2.4: Implement card playing logic
     [] Card dropping functionality
     [] Game logic interpreter placeholder call

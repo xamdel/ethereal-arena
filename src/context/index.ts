@@ -8,7 +8,7 @@ export interface GameState {
   turn?: string;
   turnNumber: number;
   combatLog: CombatLogEntry[];
-  addCombatLogEntry: (entry: CombatLogEntry) => void;
+  addCombatLogEntry: (category: 'System' | 'Player Action', details: string | object, player?: 'player1' | 'player2') => void;
   endTurn: () => void;
   handlePlayerReady: (player: 'player1' | 'player2') => void;
   addCardToHand?: (player: Player, card: Card) => void;
