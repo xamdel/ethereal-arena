@@ -37,3 +37,10 @@ export interface Card {
 export type Hand = Card[];
 
 export type Player = 'player1' | 'player2';
+
+export interface CombatLogEntry {
+  timestamp: Date;
+  category: 'System' | 'Player Action';
+  player?: 'player1' | 'player2';
+  details: string | object;
+}

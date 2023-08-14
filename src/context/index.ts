@@ -1,5 +1,5 @@
 import React from "react";
-import { Health, Energy, Buff, Debuff, PlayerState, Hand, Card, Player } from "../models";
+import { Health, Energy, Buff, Debuff, PlayerState, Hand, Card, Player, CombatLogEntry } from "../models";
 
 // Define game state type
 export interface GameState {
@@ -7,6 +7,7 @@ export interface GameState {
   player2: PlayerState;
   turn?: string;
   turnNumber: number;
+  combatLog: CombatLogEntry[];
   endTurn: () => void;
   handlePlayerReady: (player: 'player1' | 'player2') => void;
   addCardToHand?: (player: Player, card: Card) => void;

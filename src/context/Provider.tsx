@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from "react";
 import { GameState, GameStateContext, initialPlayerState } from ".";
-import { Buff, Card, Debuff, Player, PlayerState } from "../models";
+import { Buff, Card, CombatLogEntry, Debuff, Player, PlayerState } from "../models";
 import { generateHand } from "../utils";
 
 interface GameStateProviderProps {
@@ -17,6 +17,7 @@ export const useGameState = () => {
 };
 
 export const GameStateProvider: React.FC<GameStateProviderProps> = ({ children }) => {
+    const [combatLog, setCombatLog] = useState<CombatLogEntry[]>([]);
     const [playerReady, setPlayerReady] = useState({ player1: false, player2: false });
 
     const handlePlayerReady = (player: 'player1' | 'player2') => {
@@ -107,6 +108,7 @@ export const GameStateProvider: React.FC<GameStateProviderProps> = ({ children }
         player2: initialPlayerState,
         turn: undefined,
         turnNumber: 1,
+        combatLog,
         handlePlayerReady,
         endTurn,
         addCardToHand,
@@ -136,7 +138,7 @@ export const GameStateProvider: React.FC<GameStateProviderProps> = ({ children }
     }, [gameState.turn]);
 
     return (
-        <GameStateContext.Provider value={{ ...gameState, addCardToHand, removeCardFromHand }}>
+        <GameStateContext.Provider value={{ ...gameState, combatLog, addCardToHand, removeCardFromHand }}>
             {children}
         </GameStateContext.Provider>
     )

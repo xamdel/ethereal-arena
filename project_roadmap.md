@@ -51,14 +51,15 @@
     [x] Call card generation
         [x] on turn end
         [x] on game start
-        [] change generation for turn 2 - either generate cards only for the first player for turn 1, or block regeneration of the second player's hand when the first turn ends
+        [x] change generation for turn 2 - either generate cards only for the first player for turn 1, or block regeneration of the second player's hand when the first turn ends
     [x] End turn button
-- [] 2.2.3: Implement card playing logic
+- [] 2.2.3: Implement Combat Log update
+    [x] Define combat log entry schema
+    [x] Combat log state variable
+    [] Function to add log entry
+- [] 2.2.4: Implement card playing logic
     [] Card dropping functionality
     [] Game logic interpreter placeholder call
-- [] 2.2.4: Implement Combat Log update
-    [] Define combat log entry schema
-    [] Function to add log entry
 - [] 2.2.5: Implement Game Over logic
     [] Define win/lose conditions
     [] Create game over screen / message
