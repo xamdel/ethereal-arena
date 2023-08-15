@@ -81,6 +81,8 @@
 
 ### Task 2.3: Develop Game Logic Interpreter
 - [] Function for constructing JSON schema of current game state
+    [x] Player states
+    [] Recent combat log entries
 - [] Prompt template for injecting card effect, game state, available state change functions
 - [] Experiment with prompt chaining vs single response
     [] GLI returns array of relevant functions including arguments
