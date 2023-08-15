@@ -83,6 +83,12 @@ export const GameStateProvider: React.FC<GameStateProviderProps> = ({ children }
         });
     };
 
+    const onCardDrop = (card: Card) => {
+        //TODO: Call game logic interpreter
+        addCombatLogEntry('Player Action', `Player ${gameState.turn} played ${card.name}`);
+      };
+      
+
     const addHealth = (player: 'player1' | 'player2', amount: number) => {
         updatePlayerState(player, { health: { ...gameState[player].health, current: gameState[player].health.current + amount } });
     };
@@ -126,6 +132,7 @@ export const GameStateProvider: React.FC<GameStateProviderProps> = ({ children }
         endTurn,
         addCardToHand,
         removeCardFromHand,
+        onCardDrop
     });
 
     // Generate hand for other player when current player ends turn
@@ -153,7 +160,7 @@ export const GameStateProvider: React.FC<GameStateProviderProps> = ({ children }
     }, [gameState.turn]);
 
     return (
-        <GameStateContext.Provider value={{ ...gameState, combatLog, addCardToHand, removeCardFromHand }}>
+        <GameStateContext.Provider value={{ ...gameState, combatLog, addCardToHand, removeCardFromHand, onCardDrop }}>
             {children}
         </GameStateContext.Provider>
     )

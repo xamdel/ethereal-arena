@@ -62,7 +62,7 @@
         [x] When generating cards
         [x] When player ends their turn
 - [] 2.2.4: Implement card playing logic
-    [] Zoom on mouseover
+    [x] Zoom on mouseover
     [] Click & drag cards
     [] Release to drop
     [] Game logic interpreter placeholder call

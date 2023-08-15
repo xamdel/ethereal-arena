@@ -13,6 +13,7 @@ export interface GameState {
   handlePlayerReady: (player: 'player1' | 'player2') => void;
   addCardToHand?: (player: Player, card: Card) => void;
   removeCardFromHand?: (player: Player, cardIndex: number) => void;
+  onCardDrop: (card: Card) => void;
 }
 
 // Define initial values for players

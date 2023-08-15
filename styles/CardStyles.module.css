@@ -17,6 +17,10 @@
   z-index: 2;
 }
 
+.dragging {
+  cursor: grab;
+}
+
 .cardHeader {
   display: flex;
   justify-content: space-between;

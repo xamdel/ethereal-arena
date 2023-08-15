@@ -1,22 +1,36 @@
 import React, { useState } from 'react';
-import styles from '../../../styles/Arena.module.css'
+import styles from '../../../styles/Arena.module.css';
 import { Card as CardModel } from '../../models';
-import Card from '../Gameplay/Card'
+import Card from '../Gameplay/Card';
 
 interface CardDropAreaProps {
-  card?: CardModel;
-  onCardDrop?: (card: CardModel) => void; // Placeholder function to handle card drop
+  onCardDrop?: (card: CardModel) => void; // Function to handle card drop
 }
 
 const CardDropArea: React.FC<CardDropAreaProps> = ({ onCardDrop }) => {
-    const [playedCards, setPlayedCards] = useState<CardModel[]>([]);
-  
+  const [playedCards, setPlayedCards] = useState<CardModel[]>([]);
+
   const handleDrop = (event: React.DragEvent) => {
-    //placeholder
+    event.preventDefault();
+
+    // Retrieve the card data from the dragged element
+    const cardData = event.dataTransfer.getData('text/plain');
+    const droppedCard = JSON.parse(cardData) as CardModel;
+
+    // Add the card to the playedCards state
+    setPlayedCards(prev => [...prev, droppedCard]);
+
+    // Call the onCardDrop function if provided
+    onCardDrop?.(droppedCard);
+  };
+
+  // Function to allow drop event on the div
+  const allowDrop = (e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
   };
 
   return (
-    <div className={styles.cardDropArea} onDrop={handleDrop}>
+    <div className={styles.cardDropArea} onDrop={handleDrop} onDragOver={allowDrop}>
       {playedCards.map((card, index) => (
         <Card key={index} card={card} />
       ))}

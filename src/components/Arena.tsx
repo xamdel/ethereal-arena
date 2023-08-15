@@ -4,9 +4,10 @@ import HealthEnergyDisplay from './HUD/HealthEnergyDisplay';
 import { useGameState } from '../context/Provider';
 import HandDisplay from './Gameplay/HandDisplay';
 import CombatLog from './CombatLog';
+import CardDropArea from './Gameplay/CardDropArea';
 
 const Arena = () => {
-    const { player1, player2, turn, turnNumber, combatLog, endTurn, handlePlayerReady } = useGameState();
+    const { player1, player2, turn, turnNumber, combatLog, endTurn, handlePlayerReady, onCardDrop } = useGameState();
 
     return (
         <div className={styles.arenaContainer}>
@@ -31,7 +32,7 @@ const Arena = () => {
                     </div>
                 </div>
                 <div className={styles.cardDropAreaContainer}>
-                    Card drop area
+                    <CardDropArea onCardDrop={onCardDrop}/>
                 </div>
                 <div className={styles.playerArea}>
                     <div className={styles.status}>
