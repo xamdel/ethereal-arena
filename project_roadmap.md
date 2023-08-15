@@ -13,6 +13,7 @@
 - [x] 1.2.3: Define buffs schema in game state
 - [x] 1.2.4: Define debuffs schema in game state
 - [x] 1.2.5: Implement state management (React Context/Redux)
+- [] 1.2.6: Implement shields
 
 ### Task 1.3: Create Basic UI Components
 - [x] 1.3.1: Design HUD layout
@@ -25,6 +26,7 @@
             [x] debuffs
             [x] HP/Energy
             [x] buffs
+            [] shields
     [x] Card drop area
     [x] Player area
     [x] hand
@@ -46,6 +48,7 @@
         [x] Player turn
         [x] Player hand
         [x] Health, energy, buffs, debuffs
+        [] Shields
 - [x] 2.2.2: Implement turn logic
     [x] Implement turn cycle
     [x] Call card generation
@@ -61,15 +64,15 @@
         [x] When deciding who goes first
         [x] When generating cards
         [x] When player ends their turn
-- [] 2.2.4: Implement card playing logic
+- [x] 2.2.4: Implement card playing logic
     [x] Zoom on mouseover
-    [] Click & drag cards
-    [] Release to drop
-    [] Game logic interpreter placeholder call
+    [x] Click & drag cards
+    [x] Release to drop
+    [x] Game logic interpreter placeholder call
 - [] 2.2.5: Implement Game Over logic
     [] Define win/lose conditions
     [] Create game over screen / message
-- [] 2.2.6: Integrate with existing components
+- [x] 2.2.6: Integrate with existing components
 
 ### Task 2.2: Card Generation
 - [] 2.2.1: Create card generation prompt
@@ -77,6 +80,9 @@
 - [x] 2.2.3: Create function for calling OpenAI endpoint, inserting prompt
 
 ### Task 2.3: Develop Game Logic Interpreter
-- [] 2.3.1: Design interpreter structure
-- [] 2.3.2: Implement core interpreter functionality
-- [] 2.3.3: Integrate OpenAI model for card interpretation
+- [] Function for constructing JSON schema of current game state
+- [] Prompt template for injecting card effect, game state, available state change functions
+- [] Experiment with prompt chaining vs single response
+    [] GLI returns array of relevant functions including arguments
+    [] GLI returns ordered list of functions to call in sequence -> trigger prompt chain to ask for arguments to each
+- [] Function for calling state change functions according to GLI's output
