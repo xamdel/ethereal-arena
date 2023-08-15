@@ -61,15 +61,8 @@
   display: flex;
   width: 100%;
   position: absolute;
+  overflow: visible;
 }
-
-/* .player1Hand {
-  bottom: -25%;
-} */
-
-/* .player2Hand {
-  top: -25%;
-} */
 
 .cardDropAreaContainer {
   display: flex;

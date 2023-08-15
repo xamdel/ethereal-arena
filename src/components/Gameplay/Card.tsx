@@ -8,12 +8,20 @@ interface CardProps {
 }
 
 const Card: React.FC<CardProps> = ({ card, isPlayer2 = false }) => {
+    const handleMouseOver = (e: React.MouseEvent<HTMLDivElement, MouseEvent>) => {
+        e.currentTarget.classList.add(styles.zoomed);
+    };
+
+    const handleMouseOut = (e: React.MouseEvent<HTMLDivElement, MouseEvent>) => {
+        e.currentTarget.classList.remove(styles.zoomed);
+    };
+    
     // if (isPlayer2) {
     //     return <div className={styles.cardBack}></div>;
     // }
 
     return (
-        <div className={styles.card}>
+        <div className={styles.card} onMouseOver={handleMouseOver} onMouseOut={handleMouseOut}>
             <div className={styles.cardHeader}>
                 <div className={styles.cardName}>{card.name}</div>
                 <div className={styles.cardEnergyCost}>{card.energyCost}</div>
