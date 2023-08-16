@@ -87,3 +87,7 @@
     [] GLI returns array of relevant functions including arguments
     [] GLI returns ordered list of functions to call in sequence -> trigger prompt chain to ask for arguments to each
 - [] Function for calling state change functions according to GLI's output
+
+### MISC
+- [] Clear player hand and card drop area when turn ends
+- [] 

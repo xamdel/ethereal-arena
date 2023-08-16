@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from "react";
 import { GameState, GameStateContext, initialPlayerState } from ".";
 import { Buff, Card, CombatLogEntry, Debuff, Player, PlayerState } from "../models";
 import { generateHand } from "../utils";
+import { selectStateUpdateFunctions } from "../gameLogicInterpreter";
 
 interface GameStateProviderProps {
     children: React.ReactNode;
@@ -83,10 +84,14 @@ export const GameStateProvider: React.FC<GameStateProviderProps> = ({ children }
         });
     };
 
-    const onCardDrop = (card: Card) => {
+    const onCardDrop = async (card: Card) => {
         //TODO: Call game logic interpreter
+        const selectedFunctions = await selectStateUpdateFunctions(card, gameState);
+
+        console.log(selectedFunctions);
+
         addCombatLogEntry('Player Action', `Player ${gameState.turn} played ${card.name}`);
-      };
+    };
       
 
     const addHealth = (player: 'player1' | 'player2', amount: number) => {

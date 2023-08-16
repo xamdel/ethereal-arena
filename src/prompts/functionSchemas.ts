@@ -1,6 +1,5 @@
-
 const functionSchemas = {
-  generate_hand :{
+  generate_hand: {
     name: "generate_hand",
     description: "Generate a hand of exactly 5 cards",
     parameters: {
@@ -31,6 +30,27 @@ const functionSchemas = {
         },
       },
       required: ["cards"],
+    },
+  },
+  select_functions: {
+    name: "select_functions",
+    description:
+      "Select the functions necessary to update the game state with the card's effects",
+    parameters: {
+      type: "object",
+      properties: {
+        functions: {
+          type: "array",
+          items: {
+            type: "string",
+            description:
+              "Name of the function required to apply the card's effect.",
+          },
+          description:
+            "Ordered list of function names required to interpret the card's effect.",
+        },
+      },
+      required: ["functions"],
     },
   },
 };
