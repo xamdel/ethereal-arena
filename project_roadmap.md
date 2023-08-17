@@ -78,21 +78,27 @@
 - [x] 2.2.6: Integrate with existing components
 
 ### Task 2.2: Card Generation
-- [] 2.2.1: Create card generation prompt
+- [x] 2.2.1: Create card generation prompt
 - [x] 2.2.2: Create function calling schema
 - [x] 2.2.3: Create function for calling OpenAI endpoint, inserting prompt
+- [] Add game context to prompt - attempt to get cards suitable for current player/opponent status
 
 ### Task 2.3: Develop Game Logic Interpreter
 - [x] Function for constructing JSON schema of current game state
     [x] Player states
 - [x] Prompt template for injecting card effect, game state, available state change functions
-- [] Experiment with prompt chaining vs single response
+- [x] Experiment with prompt chaining vs single response
     [] GLI returns array of relevant functions including arguments
-    [] GLI returns ordered list of functions to call in sequence -> trigger prompt chain to ask for arguments to each
-- [] Function for calling state change functions according to GLI's output
+    [x] GLI returns ordered list of functions to call in sequence -> trigger prompt chain to ask for arguments to each
+- [x] Function for calling state change functions according to GLI's output
+- [] Specific Combat Logs in state change functions
 
 ### MISC
 - [] Clear player hand and card drop area when turn ends
 - [] Define order of operations for state update functions
-- [] Implement UI controls according to turn - e.g. don't let users play cards when it's not their turn
+- [] Implement logic controls
+    [] Don't let a user play cards if its not their turn
+    [] Don't let them play a card if they don't have enough energy
+    [] Don't let current HP > maximum
 - [] Link played cards in Combat Log mouseover
+- [] Reset energy on turn end or start

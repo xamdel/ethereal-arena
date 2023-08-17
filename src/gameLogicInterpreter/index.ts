@@ -25,8 +25,8 @@ export const provideArguments = async (functionName: string, cardEffect: string)
       case 'negateEffects': {
         const response = await callChatCompletion(prompt, [functionSchemas.negate_effects], { name: 'negate_effects' });
         console.log('logged from switch[negateEffects]: ', response.message?.function_call?.arguments);
-        break;
-        // return { description: response.message?.function_call?.arguments };
+        const args = JSON.parse(response.message?.function_call?.arguments || '{}');
+        return args;
       }
       case 'removeHealth':
       case 'addHealth':
@@ -34,22 +34,22 @@ export const provideArguments = async (functionName: string, cardEffect: string)
       case 'removeEnergy': {
         const response = await callChatCompletion(prompt, [functionSchemas.add_remove_health_energy], { name: 'add_remove_health_energy' });
         console.log('logged from switch[removeHealth/addHealth/addEnergy/removeEnergy]: ',response.message?.function_call?.arguments);
-        break;
-        // return { target: response.target, value: response.value };
+        const args = JSON.parse(response.message?.function_call?.arguments || '{}');
+        return args;
       }
       case 'removeDebuff':
       case 'removeBuff': {
         const response = await callChatCompletion(prompt, [functionSchemas.remove_buff_debuff], { name: 'remove_buff_debuff' });
         console.log('logged from switch[removeDebuff/removeBuff]: ',response.message?.function_call?.arguments);
-        break;
-        // return { target: response.target, names: response.names };
+        const args = JSON.parse(response.message?.function_call?.arguments || '{}');
+        return args;
       }
       case 'addDebuff':
       case 'addBuff': {
         const response = await callChatCompletion(prompt, [functionSchemas.add_buff_debuff], { name: 'add_buff_debuff' });
         console.log('logged from switch[addDebuff/addBuff]: ',response.message?.function_call?.arguments);
-        break;
-        // return { target: response.target, name: response.name, description: response.description, duration: response.duration };
+        const args = JSON.parse(response.message?.function_call?.arguments || '{}');
+        return args;
       }
       default:
         throw new Error(`Unknown function name: ${functionName}`);

@@ -9,13 +9,13 @@ export interface Energy {
 }
 
 export interface Buff {
-  type: string;
+  name: string;
   duration: number;
   effect: string;
 }
 
 export interface Debuff {
-  type: string;
+  name: string;
   duration: number;
   effect: string;
 }

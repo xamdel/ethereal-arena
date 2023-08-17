@@ -60,9 +60,9 @@ export const GameStateProvider: React.FC<GameStateProviderProps> = ({ children }
     const addCombatLogEntry = (category: 'System' | 'Player Action', details: string | object, player?: 'player1' | 'player2') => {
         const timestamp = new Date();
         const entry: CombatLogEntry = { timestamp, category, details, player };
-      
+
         setCombatLog(prev => [...prev, entry]);
-    };      
+    };
 
     // HOF for updating aspects of player state
     const updatePlayerState = (player: 'player1' | 'player2', updates: Partial<PlayerState>) => {
@@ -72,16 +72,13 @@ export const GameStateProvider: React.FC<GameStateProviderProps> = ({ children }
         }));
     };
 
-    const addCardToHand = (player: 'player1' | 'player2', card: Card) => {
-        updatePlayerState(player, {
-            hand: [...gameState[player].hand, card],
-        });
-    };
-
-    const removeCardFromHand = (player: 'player1' | 'player2', cardIndex: number) => {
-        updatePlayerState(player, {
-            hand: gameState[player].hand.filter((_, index) => index !== cardIndex),
-        });
+    // Helper function for resolving relative 'self'/'opponent' values into objective references
+    const convertTargetToPlayer = (target: 'self' | 'opponent') => {
+        if (target === 'self') {
+            return gameState.turn;
+        } else {
+            return gameState.turn === 'player1' ? 'player2' : 'player1';
+        }
     };
 
     const onCardDrop = async (card: Card) => {
@@ -111,15 +108,44 @@ export const GameStateProvider: React.FC<GameStateProviderProps> = ({ children }
         // Iterate through ordered operations and get arguments to each from GLI, invoke the state change function w/ args
         for (const functionName of orderOfOperations) {
             if (selectedFunctions?.includes(functionName)) {
-                console.log('Log from onCardDrop: Function name found:', functionName);
                 const args = await provideArguments(functionName, card.effect);
-                // functionMap[functionName as keyof typeof functionMap]?.(args);
+                console.log('Log from onCardDrop. Args: ', {args});
+                const player = convertTargetToPlayer(args.target);
+
+                switch (functionName) {
+                    case 'negateEffects':
+                        functionMap[functionName]?.(args.description);
+                        break;
+                    case 'removeHealth':
+                    case 'addHealth':
+                    case 'addEnergy':
+                    case 'removeEnergy':
+                        console.log(typeof(args.value));
+                        functionMap[functionName]?.(player!, Math.abs(args.value));
+                        break;
+                    case 'removeDebuff':
+                    case 'removeBuff':
+                        functionMap[functionName]?.(player!, args.names);
+                        break;
+                    case 'addDebuff':
+                    case 'addBuff':
+                        const effect = {
+                            name: args.name,
+                            duration: args.duration,
+                            effect: args.description
+                        }
+                        functionMap[functionName]?.(player!, effect);
+                        break;
+                    default:
+                        throw new Error(`Unknown function name: ${functionName}`);
+                }
             }
         }
 
         addCombatLogEntry('Player Action', `Player ${gameState.turn} played ${card.name}`);
     };
-      
+
+    // Functions for updating specific pieces of game state
     const negateEffects = (description: string) => {
         addCombatLogEntry('System', `${description}`);
     }
@@ -129,6 +155,8 @@ export const GameStateProvider: React.FC<GameStateProviderProps> = ({ children }
     };
 
     const removeHealth = (player: 'player1' | 'player2', amount: number) => {
+        console.log('removing health: ', {amount});
+        console.log(typeof(amount));
         addHealth(player, -amount);
     };
 
@@ -154,6 +182,18 @@ export const GameStateProvider: React.FC<GameStateProviderProps> = ({ children }
 
     const removeDebuff = (player: 'player1' | 'player2', debuffIndex: number) => {
         updatePlayerState(player, { debuffs: gameState[player].debuffs.filter((_, index) => index !== debuffIndex) });
+    };
+
+    const addCardToHand = (player: 'player1' | 'player2', card: Card) => {
+        updatePlayerState(player, {
+            hand: [...gameState[player].hand, card],
+        });
+    };
+
+    const removeCardFromHand = (player: 'player1' | 'player2', cardIndex: number) => {
+        updatePlayerState(player, {
+            hand: gameState[player].hand.filter((_, index) => index !== cardIndex),
+        });
     };
 
     const [gameState, setGameState] = useState<GameState>({
