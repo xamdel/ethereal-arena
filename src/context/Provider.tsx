@@ -1,8 +1,8 @@
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useState } from "react";
 import { GameState, GameStateContext, initialPlayerState } from ".";
 import { Buff, Card, CombatLogEntry, Debuff, Player, PlayerState } from "../models";
 import { generateHand } from "../utils";
-import { selectStateUpdateFunctions } from "../gameLogicInterpreter";
+import { selectStateUpdateFunctions, provideArguments } from "../gameLogicInterpreter";
 
 interface GameStateProviderProps {
     children: React.ReactNode;
@@ -85,14 +85,44 @@ export const GameStateProvider: React.FC<GameStateProviderProps> = ({ children }
     };
 
     const onCardDrop = async (card: Card) => {
-        //TODO: Call game logic interpreter
-        const selectedFunctions = await selectStateUpdateFunctions(card, gameState);
+        // Remove energy
+        removeEnergy(gameState.turn!, card.energyCost)
 
-        console.log(selectedFunctions);
+        // Ask the Game Logic Interpreter to select the state change functions appropriate to the card effect
+        const selectedFunctions = await selectStateUpdateFunctions(card, gameState);
+        console.log('Log from onCardDrop: Selected functions: ', selectedFunctions);
+
+        // Create a mapping for calling the relevant functions in order NOTE: may want to use the GLI for this as well - some cards may imply specific order of operations in the effect description
+        const functionMap = {
+            negateEffects,
+            removeHealth,
+            addHealth,
+            removeDebuff,
+            removeBuff,
+            addDebuff,
+            addBuff,
+            addEnergy,
+            removeEnergy
+        };
+
+        // Create string array for iteration
+        const orderOfOperations = Object.keys(functionMap);
+
+        // Iterate through ordered operations and get arguments to each from GLI, invoke the state change function w/ args
+        for (const functionName of orderOfOperations) {
+            if (selectedFunctions?.includes(functionName)) {
+                console.log('Log from onCardDrop: Function name found:', functionName);
+                const args = await provideArguments(functionName, card.effect);
+                // functionMap[functionName as keyof typeof functionMap]?.(args);
+            }
+        }
 
         addCombatLogEntry('Player Action', `Player ${gameState.turn} played ${card.name}`);
     };
       
+    const negateEffects = (description: string) => {
+        addCombatLogEntry('System', `${description}`);
+    }
 
     const addHealth = (player: 'player1' | 'player2', amount: number) => {
         updatePlayerState(player, { health: { ...gameState[player].health, current: gameState[player].health.current + amount } });

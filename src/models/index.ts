@@ -31,7 +31,7 @@ export interface PlayerState {
 export interface Card {
   name: string;
   effect: string;
-  energyCost: string;
+  energyCost: number;
 }
 
 export type Hand = Card[];

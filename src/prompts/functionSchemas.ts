@@ -19,8 +19,8 @@ const functionSchemas = {
                 description: "The effect of the card",
               },
               energyCost: {
-                type: "string",
-                description: "The energy cost of the card",
+                type: "number",
+                description: "The energy cost of the card (1-4)",
               },
             },
             required: ["name", "effect", "energyCost"],
@@ -62,7 +62,7 @@ const functionSchemas = {
       properties: {
         target: {
           type: "string",
-          description: "Target (user/opponent) for the operation.",
+          description: "Target (self/opponent) for the operation.",
         },
         value: {
           type: "number",
@@ -80,7 +80,7 @@ const functionSchemas = {
       properties: {
         target: {
           type: "string",
-          description: "Target (user/opponent) for the operation.", //TODO: account for edge case: card effects targeting both
+          description: "Target (self/opponent) for the operation.", //TODO: account for edge case: card effects targeting both
         },
         names: {
           type: "array",
@@ -99,7 +99,7 @@ const functionSchemas = {
       properties: {
         target: {
           type: "string",
-          description: "Target (user/opponent) for the operation.",
+          description: "Target (self/opponent) for the operation.",
         },
         name: {
           type: "string",

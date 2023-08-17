@@ -5,7 +5,7 @@ import { Health, Energy, Buff, Debuff, PlayerState, Hand, Card, Player, CombatLo
 export interface GameState {
   player1: PlayerState;
   player2: PlayerState;
-  turn?: string;
+  turn?: 'player1' | 'player2';
   turnNumber: number;
   combatLog: CombatLogEntry[];
   addCombatLogEntry: (category: 'System' | 'Player Action', details: string | object, player?: 'player1' | 'player2') => void;

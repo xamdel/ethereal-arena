@@ -94,4 +94,5 @@
 ### MISC
 - [] Clear player hand and card drop area when turn ends
 - [] Define order of operations for state update functions
-- [] 
+- [] Implement UI controls according to turn - e.g. don't let users play cards when it's not their turn
+- [] Link played cards in Combat Log mouseover
