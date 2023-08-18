@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import styles from '../../../styles/Arena.module.css'
 import { Card as CardModel } from '../../models';
 import Card from './Card'
@@ -9,7 +9,7 @@ interface HandDisplayProps {
 }
 
 const HandDisplay: React.FC<HandDisplayProps> = ({ cards, isPlayer2 = false }) => {
-    const playerClass = isPlayer2 ? styles.player2Hand : styles.player1Hand;
+  const playerClass = isPlayer2 ? styles.player2Hand : styles.player1Hand;
 
   return (
     <div className={`${styles.handDisplay} ${playerClass}`}>

@@ -49,8 +49,12 @@ export const GameStateProvider: React.FC<GameStateProviderProps> = ({ children }
             addCombatLogEntry('System', `${prev.turn} ended their turn.`)
             const nextPlayer = prev.turn === 'player1' ? 'player2' : 'player1';
 
+            // Clear the hand of the player who just ended their turn
+            const updatedPlayerState = { ...prev[prev.turn!], hand: [] };
+
             return {
                 ...prev,
+                [prev.turn!]: updatedPlayerState,
                 turn: nextPlayer,
                 turnNumber: prev.turnNumber + 1,
             };
@@ -109,7 +113,7 @@ export const GameStateProvider: React.FC<GameStateProviderProps> = ({ children }
         for (const functionName of orderOfOperations) {
             if (selectedFunctions?.includes(functionName)) {
                 const args = await provideArguments(functionName, card.effect);
-                console.log('Log from onCardDrop. Args: ', {args});
+                console.log('Log from onCardDrop. Args: ', { args });
                 const player = convertTargetToPlayer(args.target);
 
                 switch (functionName) {
@@ -120,7 +124,7 @@ export const GameStateProvider: React.FC<GameStateProviderProps> = ({ children }
                     case 'addHealth':
                     case 'addEnergy':
                     case 'removeEnergy':
-                        console.log(typeof(args.value));
+                        console.log(typeof (args.value));
                         functionMap[functionName]?.(player!, Math.abs(args.value));
                         break;
                     case 'removeDebuff':
@@ -155,8 +159,8 @@ export const GameStateProvider: React.FC<GameStateProviderProps> = ({ children }
     };
 
     const removeHealth = (player: 'player1' | 'player2', amount: number) => {
-        console.log('removing health: ', {amount});
-        console.log(typeof(amount));
+        console.log('removing health: ', { amount });
+        console.log(typeof (amount));
         addHealth(player, -amount);
     };
 
@@ -209,6 +213,12 @@ export const GameStateProvider: React.FC<GameStateProviderProps> = ({ children }
         removeCardFromHand,
         onCardDrop
     });
+
+    // Clear hands on turn end
+    const clearHands = () => {
+        updatePlayerState('player1', { hand: [] });
+        updatePlayerState('player2', { hand: [] });
+    };
 
     // Generate hand for other player when current player ends turn
     useEffect(() => {

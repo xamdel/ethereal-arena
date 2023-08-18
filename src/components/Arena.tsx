@@ -22,7 +22,7 @@ const Arena = () => {
             <div className={styles.battleHud}>
                 <div className={styles.opponentArea}>
                     <div className={styles.opponentHand}>
-                        <HandDisplay cards={player2.hand} isPlayer2={true} />
+                        <HandDisplay cards={player2.hand} isPlayer2={true}/>
                     </div>
                     <div className={styles.status}>
                         <div className={styles.debuffs}>
@@ -53,7 +53,7 @@ const Arena = () => {
                         </div>
                     </div>
                     <div className={styles.playerHand}>
-                        <HandDisplay cards={player1.hand} />
+                        <HandDisplay cards={player1.hand}/>
                     </div>
                 </div>
             </div>
