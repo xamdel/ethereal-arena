@@ -102,3 +102,4 @@
     [] Don't let current HP > maximum
 - [] Link played cards in Combat Log mouseover
 - [] Reset energy on turn end or start
+- [] Implement duration for buffs/debuffs

@@ -1,0 +1,26 @@
+.healthEnergyDisplay {
+  display: flex;
+  flex-direction: row;
+  justify-content: space-around;
+  border: 1px solid greenyellow;
+}
+
+.health,
+.energy {
+  padding: 5px;
+}
+
+.buffDebuffIcon {
+  position: relative;
+  display: inline-block;
+}
+
+.iconPlaceholder {
+  width: 20px;
+  height: 20px;
+  background-color: #ccc;
+  text-align: center;
+  line-height: 20px;
+  border-radius: 50%;
+  cursor: help;
+}

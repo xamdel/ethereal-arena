@@ -1,5 +1,5 @@
 import React, { useContext } from 'react';
-import styles from '../../../styles/Status.module.css';
+import styles from '../../../styles/HUD.module.css';
 import { GameStateContext } from '../../context';
 
 interface HealthEnergyDisplayProps {
