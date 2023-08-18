@@ -39,9 +39,9 @@
 - [x] 1.3.5: Create hand display component
 - [x] 1.3.6: Create combat log component
 - [x] 1.3.7: Create card drop area component
-- [] 1.3.8: Create components for buffs, debuffs
-    [] Display icons on HUD
-    [] Display description, duration on mouseover
+- [x] 1.3.8: Create components for buffs, debuffs
+    [x] Display icons on HUD
+    [x] Display description, duration on mouseover
 
 ## Milestone 2: AI Integration and Card Generation
 
@@ -95,7 +95,7 @@
 
 ### MISC
 - [] Clear player hand and card drop area when turn ends
-- [] Define order of operations for state update functions
+- [x] Define order of operations for state update functions
 - [] Implement logic controls
     [] Don't let a user play cards if its not their turn
     [] Don't let them play a card if they don't have enough energy

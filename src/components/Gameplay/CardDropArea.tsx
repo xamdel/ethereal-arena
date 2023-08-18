@@ -1,14 +1,20 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import styles from '../../../styles/Arena.module.css';
 import { Card as CardModel } from '../../models';
 import Card from '../Gameplay/Card';
 
 interface CardDropAreaProps {
-  onCardDrop?: (card: CardModel) => void; // Function to handle card drop
+  onCardDrop?: (card: CardModel) => void;
+  turnNumber: number;
 }
 
-const CardDropArea: React.FC<CardDropAreaProps> = ({ onCardDrop }) => {
+const CardDropArea: React.FC<CardDropAreaProps> = ({ onCardDrop, turnNumber }) => {
   const [playedCards, setPlayedCards] = useState<CardModel[]>([]);
+
+  // Clear board on turn end
+  useEffect(() => {
+    setPlayedCards([]);
+  }, [turnNumber]);
 
   const handleDrop = (event: React.DragEvent) => {
     event.preventDefault();
