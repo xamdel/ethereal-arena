@@ -34,7 +34,7 @@ export const GameStateProvider: React.FC<GameStateProviderProps> = ({ children }
             const startingPlayer = Math.random() < 0.5 ? 'player1' : 'player2';
             addCombatLogEntry('System', `${startingPlayer} goes first. Generating starting hand...`)
 
-            generateHand().then(hand => {
+            generateHand(startingPlayer).then(hand => {
                 setGameState(prev => ({
                     ...prev,
                     turn: startingPlayer,
@@ -45,21 +45,24 @@ export const GameStateProvider: React.FC<GameStateProviderProps> = ({ children }
     }, [playerReady]);
 
     const endTurn = () => {
-        setGameState(prev => {
-            addCombatLogEntry('System', `${prev.turn} ended their turn.`)
-            const nextPlayer = prev.turn === 'player1' ? 'player2' : 'player1';
-
-            // Clear the hand of the player who just ended their turn
-            const updatedPlayerState = { ...prev[prev.turn!], hand: [] };
+        setGameState((prev) => {
+            const currentPlayer = prev.turn!;
+            const nextPlayer = currentPlayer === 'player1' ? 'player2' : 'player1';
+            const updatedPlayerState = {
+                ...prev[currentPlayer],
+                energy: { ...prev[currentPlayer].energy, current: 5 },
+                hand: [],
+            };
 
             return {
                 ...prev,
-                [prev.turn!]: updatedPlayerState,
+                [currentPlayer]: updatedPlayerState,
                 turn: nextPlayer,
                 turnNumber: prev.turnNumber + 1,
             };
         });
     };
+
 
     const addCombatLogEntry = (category: 'System' | 'Player Action', details: string | object, player?: 'player1' | 'player2') => {
         const timestamp = new Date();
@@ -214,12 +217,6 @@ export const GameStateProvider: React.FC<GameStateProviderProps> = ({ children }
         onCardDrop
     });
 
-    // Clear hands on turn end
-    const clearHands = () => {
-        updatePlayerState('player1', { hand: [] });
-        updatePlayerState('player2', { hand: [] });
-    };
-
     // Generate hand for other player when current player ends turn
     useEffect(() => {
         if (gameState.turnNumber === 1) return;
@@ -228,7 +225,7 @@ export const GameStateProvider: React.FC<GameStateProviderProps> = ({ children }
 
         const generateNewHand = async () => {
             try {
-                const newHand = await generateHand();
+                const newHand = await generateHand(gameState.turn as 'player1' | 'player2');
                 setGameState(prev => ({
                     ...prev,
                     [gameState.turn as 'player1' | 'player2']: {

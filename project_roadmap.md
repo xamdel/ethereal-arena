@@ -94,12 +94,13 @@
 - [] Specific Combat Logs in state change functions
 
 ### MISC
-- [] Clear player hand and card drop area when turn ends
+- [x] Clear player hand and card drop area when turn ends
 - [x] Define order of operations for state update functions
 - [] Implement logic controls
     [] Don't let a user play cards if its not their turn
     [] Don't let them play a card if they don't have enough energy
     [] Don't let current HP > maximum
 - [] Link played cards in Combat Log mouseover
-- [] Reset energy on turn end or start
+- [x] Reset energy on turn end or start
 - [] Implement duration for buffs/debuffs
+- [] Remove card from hand when played

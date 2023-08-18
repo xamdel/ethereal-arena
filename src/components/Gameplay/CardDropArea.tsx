@@ -2,13 +2,10 @@ import React, { useEffect, useState } from 'react';
 import styles from '../../../styles/Arena.module.css';
 import { Card as CardModel } from '../../models';
 import Card from '../Gameplay/Card';
+import { useGameState } from '../../context/Provider';
 
-interface CardDropAreaProps {
-  onCardDrop?: (card: CardModel) => void;
-  turnNumber: number;
-}
-
-const CardDropArea: React.FC<CardDropAreaProps> = ({ onCardDrop, turnNumber }) => {
+const CardDropArea: React.FC = () => {
+  const { player1, player2, turn, turnNumber, onCardDrop } = useGameState();
   const [playedCards, setPlayedCards] = useState<CardModel[]>([]);
 
   // Clear board on turn end
@@ -19,9 +16,29 @@ const CardDropArea: React.FC<CardDropAreaProps> = ({ onCardDrop, turnNumber }) =
   const handleDrop = (event: React.DragEvent) => {
     event.preventDefault();
 
+    // Don't let players play cards before the game starts
+    if (!turn) {
+      return;
+    }
+
     // Retrieve the card data from the dragged element
     const cardData = event.dataTransfer.getData('text/plain');
     const droppedCard = JSON.parse(cardData) as CardModel;
+
+    // Check if it's their turn
+    if (droppedCard.owner !== turn) {
+      console.log('Not your turn!');
+      return;
+    }
+
+    // Determine current player state
+    const currentPlayerState = turn === 'player1' ? player1 : player2;
+
+    // Check if the player has enough energy to play the card
+    if (droppedCard.energyCost > currentPlayerState.energy.current) {
+      console.log('Not enough energy!');
+      return;
+    }
 
     // Add the card to the playedCards state
     setPlayedCards(prev => [...prev, droppedCard]);

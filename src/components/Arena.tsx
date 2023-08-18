@@ -37,7 +37,7 @@ const Arena = () => {
                     </div>
                 </div>
                 <div className={styles.cardDropAreaContainer}>
-                    <CardDropArea onCardDrop={onCardDrop} turnNumber={turnNumber}/>
+                    <CardDropArea />
                 </div>
                 <div className={styles.playerArea}>
                     <div className={styles.status}>

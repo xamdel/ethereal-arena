@@ -32,6 +32,7 @@ export interface Card {
   name: string;
   effect: string;
   energyCost: number;
+  owner: string;
 }
 
 export type Hand = Card[];

@@ -9,7 +9,7 @@ const getFunctionsArray = (names: string[]): ChatCompletionFunctions[] => {
     return names.map(name => (functionSchemas as any)[name]);
   };
 
-export async function generateHand(): Promise<Card[]> {
+export async function generateHand(owner: 'player1' | 'player2'): Promise<Card[]> {
   const requiredFunctions = ["generate_hand"];
   const functionsArray = getFunctionsArray(requiredFunctions);
 
@@ -27,7 +27,9 @@ export async function generateHand(): Promise<Card[]> {
     const cardsObject = JSON.parse(cardsJSON);
 
     if (cardsObject.cards.length >= 5) {
-      return cardsObject.cards.slice(0, 5);
+      const cards = cardsObject.cards.slice(0, 5);
+      cards.forEach((card: Card) => (card.owner = owner));
+      return cards;
     }
 
     retries++;
