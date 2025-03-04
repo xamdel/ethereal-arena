@@ -1,2 +1,5 @@
 node_modules
 .env
+data-flow-diagram.mermaid
+design-document.md
+implementation-checklist.md
