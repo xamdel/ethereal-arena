@@ -7,6 +7,7 @@ import { useGameActions } from '@/hooks';
 import { LoadingSpinner, Notification, SplashScreen, DraftScreen } from '@/components/ui';
 import { useGame } from '@/context';
 import { ActionType } from '@/types';
+import { v4 as uuidv4 } from 'uuid';
 
 export default function Home() {
   const { gameState, uiState, dispatchUI, getCurrentPlayer } = useGame();
@@ -48,7 +49,7 @@ export default function Home() {
         
         // Process one effect at a time
         const action = {
-          id: Math.random().toString(),
+          id: uuidv4(),
           type: ActionType.PROCESS_QUEUE,
           playerId: 'system',
           payload: {},
@@ -75,8 +76,8 @@ export default function Home() {
     return <SplashScreen onNewGame={handleNewGame} isLoading={isCreatingGame} />;
   }
   
-  // Game is initializing or loading
-  if (isCreatingGame || uiState.isProcessing) {
+  // Only show loading spinner when creating game, not for every action
+  if (isCreatingGame) {
     return (
       <div className="h-screen bg-gray-900 text-white">
         <LoadingSpinner 

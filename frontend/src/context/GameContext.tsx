@@ -2,6 +2,7 @@
 
 import { createContext, useContext, useReducer, ReactNode, useState, useEffect } from 'react';
 import { GameState, GameAction, ActionType } from '@/types';
+import { v4 as uuidv4 } from 'uuid';
 
 // Initial empty game state
 const initialGameState: GameState = {
@@ -90,7 +91,7 @@ function gameStateReducer(state: GameState, action: GameAction): GameState {
         
       // Add a new effect to the queue
       const newEffect = {
-        id: Math.random().toString(),
+        id: uuidv4(),
         type: effectType,
         value: effectValue,
         source: state.activePlayerId,

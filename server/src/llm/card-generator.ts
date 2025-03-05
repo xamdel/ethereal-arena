@@ -1,6 +1,6 @@
 import { v4 as uuidv4 } from 'uuid';
 import { LLMClient, llmClient } from './api-client';
-import { Card } from '../../frontend/src/types/game';
+import { Card } from '@/types';
 
 // Default card generation options
 interface CardGenerationOptions {

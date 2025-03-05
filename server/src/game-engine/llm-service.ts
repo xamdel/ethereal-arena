@@ -1,5 +1,5 @@
+import { Card } from '@/types';
 import { generateCards, interpretCardEffects, InterpretedEffect } from '../llm';
-import { Card } from '../../../frontend/src/types/game';
 
 /**
  * Interface for the game state expected by the LLM service
@@ -88,11 +88,26 @@ export class LLMService {
     wildcardEffects: InterpretedEffect[];
     narrative: string;
   }> {
-    return interpretCardEffects(card, playerId, {
-      ...gameState,
-      // If targetId is provided, add it to the context
-      targetId
-    });
+    console.log(`[LLMService] interpretCardEffects called for card: ${card.name} (${card.id})`);
+    console.log(`[LLMService] Player ID: ${playerId}, Target ID: ${targetId || 'not specified'}`);
+    console.log(`[LLMService] Game state has ${Object.keys(gameState.players).length} players`);
+    console.log(`[LLMService] Game turn: ${gameState.turn}, Phase: ${gameState.phase}`);
+    console.log(`[LLMService] Card base effects count: ${card.base_effects?.length || 0}`);
+    console.log(`[LLMService] Card has wildcard effect: ${!!card.wildcard_effect}`);
+    
+    try {
+      const result = await interpretCardEffects(card, playerId, {
+        ...gameState,
+        // If targetId is provided, add it to the context
+        targetId
+      });
+      
+      console.log(`[LLMService] Card effect interpretation completed successfully`);
+      return result;
+    } catch (error) {
+      console.error(`[LLMService] Error interpreting card effects: ${(error as Error).message}`);
+      throw error;
+    }
   }
   
   /**

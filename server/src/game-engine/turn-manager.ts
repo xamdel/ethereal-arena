@@ -167,20 +167,20 @@ export const generateCards = async (
  */
 export const processDraw = async (state: GameState): Promise<GameState> => {
   if (!state.activePlayerId || !state.players[state.activePlayerId]) {
-    console.error('No active player for draw phase');
+    console.error('[TurnManager] No active player for draw phase');
     return state;
   }
   
-  console.log(`Processing draw phase for player: ${state.activePlayerId}`);
+  console.log(`[TurnManager] Processing draw phase for player: ${state.activePlayerId}`);
   
   const activePlayer = state.players[state.activePlayerId];
   const isFirstTurn = state.turnNumber <= Object.keys(state.players).length;
   
-  console.log(`Is first turn: ${isFirstTurn}, Turn number: ${state.turnNumber}, Player count: ${Object.keys(state.players).length}`);
+  console.log(`[TurnManager] Is first turn: ${isFirstTurn}, Turn number: ${state.turnNumber}, Player count: ${Object.keys(state.players).length}`);
   
   // Generate cards based on draw stat or first turn rules
   const cardCount = isFirstTurn ? 10 : activePlayer.draw;
-  console.log(`Generating ${cardCount} cards for player ${state.activePlayerId}`);
+  console.log(`[TurnManager] Generating ${cardCount} cards for player ${state.activePlayerId}`);
   
   try {
     // Generate cards for the player using the LLM service (or fallback to mock cards)
@@ -188,7 +188,7 @@ export const processDraw = async (state: GameState): Promise<GameState> => {
     
     // Check if cards were added
     const handSize = newState.players[state.activePlayerId].hand.length;
-    console.log(`Player hand size after generation: ${handSize}`);
+    console.log(`[TurnManager] Player hand size after generation: ${handSize}`);
     
     // If it's the first turn, stay in the draw phase so the player can select cards
     // Otherwise, move to the action phase
@@ -196,7 +196,7 @@ export const processDraw = async (state: GameState): Promise<GameState> => {
     
     return newState;
   } catch (error) {
-    console.error('Error in processDraw:', error);
+    console.error('[TurnManager] Error in processDraw:', error);
     // Return original state if there was an error
     return state;
   }
@@ -205,11 +205,13 @@ export const processDraw = async (state: GameState): Promise<GameState> => {
 /**
  * End the current player's turn
  */
-export const endTurn = (state: GameState): GameState => {
+export const endTurn = async (state: GameState): Promise<GameState> => {
   if (!state.activePlayerId) {
-    console.error('No active player to end turn for');
+    console.error('[TurnManager] No active player to end turn for');
     return state;
   }
+  
+  console.log(`[TurnManager] Ending turn for player: ${state.activePlayerId}`);
   
   // Create an end turn action
   const endTurnAction: GameAction = {
@@ -222,31 +224,47 @@ export const endTurn = (state: GameState): GameState => {
     validated: true
   };
   
-  // Process the end turn action through the reducer
-  return gameReducer(state, endTurnAction);
+  try {
+    // Process the end turn action through the reducer - now async
+    console.log(`[TurnManager] Processing END_TURN action`);
+    return await gameReducer(state, endTurnAction);
+  } catch (error) {
+    console.error(`[TurnManager] Error ending turn:`, error);
+    return state;
+  }
 };
 
 /**
  * Process a full turn sequence automatically
  * Used for AI players or automated turn transitions
+ * Now supports async operations
  */
-export const processFullTurn = (state: GameState): GameState => {
+export const processFullTurn = async (state: GameState): Promise<GameState> => {
   if (!state.activePlayerId || !state.players[state.activePlayerId]) {
-    console.error('No active player for turn processing');
+    console.error('[TurnManager] No active player for turn processing');
     return state;
   }
   
-  // Start turn
-  let currentState = startTurn(state);
+  console.log(`[TurnManager] Processing full turn for player: ${state.activePlayerId}`);
   
-  // Process draw phase
-  currentState = processDraw(currentState);
-  
-  // If it's a first turn, the player would select cards here
-  // For now, we'll skip this selection for simplicity
-  
-  // End turn (this will handle the phase transitions)
-  currentState = endTurn(currentState);
-  
-  return currentState;
+  try {
+    // Start turn
+    let currentState = startTurn(state);
+    
+    // Process draw phase - async
+    console.log(`[TurnManager] Processing draw phase`);
+    currentState = await processDraw(currentState);
+    
+    // If it's a first turn, the player would select cards here
+    // For now, we'll skip this selection for simplicity
+    
+    // End turn (this will handle the phase transitions) - async
+    console.log(`[TurnManager] Ending turn`);
+    currentState = await endTurn(currentState);
+    
+    return currentState;
+  } catch (error) {
+    console.error('[TurnManager] Error processing full turn:', error);
+    return state;
+  }
 };

@@ -55,26 +55,39 @@ router.get('/games/:gameId', (req, res) => {
  * Submit player action
  * POST /api/games/:gameId/actions
  */
-router.post('/games/:gameId/actions', (req, res) => {
+router.post('/games/:gameId/actions', async (req, res) => {
   const { gameId } = req.params;
   const action: GameAction = req.body;
   
-  // Process the action using the game engine
-  const result = gameEngine.processAction(gameId, action);
+  console.log(`Received action ${action.type} for game ${gameId} from player ${action.playerId}`);
   
-  if (!result.session) {
-    return res.status(result.error?.includes('not found') ? 404 : 400).json({ 
-      error: result.error || 'Failed to process action' 
+  try {
+    // Process the action using the game engine - now async
+    const result = await gameEngine.processAction(gameId, action);
+    
+    if (!result.session) {
+      console.error(`Failed to process action: ${result.error}`);
+      return res.status(result.error?.includes('not found') ? 404 : 400).json({ 
+        error: result.error || 'Failed to process action' 
+      });
+    }
+    
+    console.log(`Action processed successfully`);
+    
+    // Return the updated game state
+    res.json({
+      actionId: action.id,
+      status: 'processed',
+      timestamp: Date.now(),
+      gameState: result.session.gameState
+    });
+  } catch (error) {
+    console.error(`Error processing action:`, error);
+    res.status(500).json({
+      error: 'Internal server error processing action',
+      details: error instanceof Error ? error.message : 'Unknown error'
     });
   }
-  
-  // Return the updated game state
-  res.json({
-    actionId: action.id,
-    status: 'processed',
-    timestamp: Date.now(),
-    gameState: result.session.gameState
-  });
 });
 
 /**

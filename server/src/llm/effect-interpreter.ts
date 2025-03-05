@@ -1,4 +1,4 @@
-import { Card } from '../../frontend/src/types/game';
+import { Card } from '@/types';
 import { LLMClient, llmClient } from './api-client';
 
 // Game state interface for effect interpretation
@@ -66,17 +66,31 @@ export class EffectInterpreter {
     wildcardEffects: InterpretedEffect[];
     narrative: string;
   }> {
+    console.log(`[EffectInterpreter] Starting interpretation for card: ${context.card.name} (${context.card.id})`);
+    console.log(`[EffectInterpreter] Player: ${context.playerId}, Target: ${context.targetId || 'not specified'}`);
+    console.log(`[EffectInterpreter] Card base effects: ${JSON.stringify(context.card.base_effects)}`);
+    console.log(`[EffectInterpreter] Card wildcard effect: ${context.card.wildcard_effect}`);
+    
     // Create the prompt for effect interpretation
     const prompt = this.createEffectInterpretationPrompt(context);
+    console.log(`[EffectInterpreter] Generated prompt: ${prompt}`);
 
+    console.log(`[EffectInterpreter] Calling LLM with temperature 0.3...`);
     // Call the LLM with the prompt
     const response = await this.llmClient.complete(prompt, {
       temperature: 0.3, // Lower temperature for more consistent interpretations
       systemPrompt: this.getEffectInterpretationSystemPrompt(),
     });
+    console.log(`[EffectInterpreter] Received LLM response with ${response.content.length} characters`);
+    console.log(`[EffectInterpreter] Model used: ${response.model}, Tokens: ${response.totalTokens}`);
 
     // Parse the response to extract interpreted effects
+    console.log(`[EffectInterpreter] Parsing response to extract effects...`);
     const interpretation = this.parseEffectInterpretation(response.content);
+    console.log(`[EffectInterpreter] Parsed ${interpretation.base_effects.length} base effects and ${interpretation.wildcard_effect.length} wildcard effects`);
+    console.log(`[EffectInterpreter] Base effects: ${JSON.stringify(interpretation.base_effects)}`);
+    console.log(`[EffectInterpreter] Wildcard effects: ${JSON.stringify(interpretation.wildcard_effect)}`);
+    console.log(`[EffectInterpreter] Narrative: "${interpretation.narrative}"`);
 
     return {
       baseEffects: interpretation.base_effects,
@@ -194,27 +208,69 @@ Respond with a JSON object containing the interpreted effects. Example format:
    */
   private parseEffectInterpretation(content: string): EffectInterpretationResponse {
     try {
+      console.log(`[EffectInterpreter] Starting to parse LLM response...`);
+      
       // Extract JSON from the response (in case there's extra text)
       const jsonMatch = content.match(/\{[\s\S]*\}/);
       if (!jsonMatch) {
+        console.error(`[EffectInterpreter] No valid JSON found in the response`);
+        console.log(`[EffectInterpreter] Raw response content: ${content}`);
         throw new Error('No valid JSON found in the response');
       }
 
       const jsonContent = jsonMatch[0];
-      const parsed = JSON.parse(jsonContent);
+      console.log(`[EffectInterpreter] Extracted JSON content: ${jsonContent}`);
+      
+      let parsed;
+      try {
+        parsed = JSON.parse(jsonContent);
+        console.log(`[EffectInterpreter] Successfully parsed JSON`);
+      } catch (parseError) {
+        console.error(`[EffectInterpreter] JSON.parse error: ${(parseError as Error).message}`);
+        console.log(`[EffectInterpreter] Invalid JSON content: ${jsonContent}`);
+        throw parseError;
+      }
 
-      // Validate the response format
-      if (!parsed.base_effects || !Array.isArray(parsed.base_effects)) {
+      // Validate the response format with detailed logging
+      console.log(`[EffectInterpreter] Validating response format...`);
+      console.log(`[EffectInterpreter] Response keys: ${Object.keys(parsed).join(', ')}`);
+      
+      if (!parsed.base_effects) {
+        console.error(`[EffectInterpreter] base_effects key missing in response`);
         throw new Error('Invalid response format: base_effects array not found');
       }
+      
+      if (!Array.isArray(parsed.base_effects)) {
+        console.error(`[EffectInterpreter] base_effects is not an array, type: ${typeof parsed.base_effects}`);
+        throw new Error('Invalid response format: base_effects is not an array');
+      }
+      
+      console.log(`[EffectInterpreter] base_effects array validation passed`);
 
-      if (!parsed.wildcard_effect || !Array.isArray(parsed.wildcard_effect)) {
+      if (!parsed.wildcard_effect) {
+        console.error(`[EffectInterpreter] wildcard_effect key missing in response`);
         throw new Error('Invalid response format: wildcard_effect array not found');
       }
+      
+      if (!Array.isArray(parsed.wildcard_effect)) {
+        console.error(`[EffectInterpreter] wildcard_effect is not an array, type: ${typeof parsed.wildcard_effect}`);
+        throw new Error('Invalid response format: wildcard_effect is not an array');
+      }
+      
+      console.log(`[EffectInterpreter] wildcard_effect array validation passed`);
 
-      if (!parsed.narrative || typeof parsed.narrative !== 'string') {
+      if (!parsed.narrative) {
+        console.error(`[EffectInterpreter] narrative key missing in response`);
         throw new Error('Invalid response format: narrative string not found');
       }
+      
+      if (typeof parsed.narrative !== 'string') {
+        console.error(`[EffectInterpreter] narrative is not a string, type: ${typeof parsed.narrative}`);
+        throw new Error('Invalid response format: narrative is not a string');
+      }
+      
+      console.log(`[EffectInterpreter] narrative validation passed`);
+      console.log(`[EffectInterpreter] Response format validation complete`);
 
       return {
         base_effects: parsed.base_effects,
@@ -222,8 +278,12 @@ Respond with a JSON object containing the interpreted effects. Example format:
         narrative: parsed.narrative
       };
     } catch (error) {
-      console.error('Failed to parse effect interpretation:', error);
-      console.log('Raw response:', content);
+      console.error(`[EffectInterpreter] Failed to parse effect interpretation: ${(error as Error).message}`);
+      console.log(`[EffectInterpreter] Raw response length: ${content.length} characters`);
+      console.log(`[EffectInterpreter] First 200 chars of raw response: ${content.substring(0, 200)}`);
+      if (content.length > 400) {
+        console.log(`[EffectInterpreter] Last 200 chars of raw response: ${content.substring(content.length - 200)}`);
+      }
       throw new Error(`Failed to parse effect interpretation: ${(error as Error).message}`);
     }
   }

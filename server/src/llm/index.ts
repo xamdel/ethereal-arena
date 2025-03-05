@@ -21,10 +21,28 @@ export async function generateCards(count: number = 5, playerContext?: any) {
 
 // Convenience function to interpret a card's effects
 export async function interpretCardEffects(card: any, playerId: string, gameState: any) {
+  console.log(`[LLM] interpretCardEffects called for card: ${card.name} (${card.id})`);
+  console.log(`[LLM] Player ID: ${playerId}`);
+  console.log(`[LLM] Game state contains ${Object.keys(gameState.players).length} players`);
+  console.log(`[LLM] Target ID included in game state: ${gameState.targetId || 'none'}`);
+  
   const { effectInterpreter } = await import('./effect-interpreter');
-  return effectInterpreter.interpretCardEffects({
-    card,
-    playerId,
-    gameState
-  });
+  
+  try {
+    console.log(`[LLM] Calling effectInterpreter.interpretCardEffects...`);
+    const result = await effectInterpreter.interpretCardEffects({
+      card,
+      playerId,
+      targetId: gameState.targetId,
+      gameState
+    });
+    
+    console.log(`[LLM] Effect interpretation completed successfully`);
+    console.log(`[LLM] Returned ${result.baseEffects.length} base effects and ${result.wildcardEffects.length} wildcard effects`);
+    
+    return result;
+  } catch (error) {
+    console.error(`[LLM] Error in interpretCardEffects: ${(error as Error).message}`);
+    throw error;
+  }
 }

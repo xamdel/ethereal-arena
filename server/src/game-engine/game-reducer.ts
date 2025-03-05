@@ -9,13 +9,16 @@ import * as stateHelpers from './state-helpers';
 
 /**
  * Process a game action and return the updated state
+ * Now supports async operations for LLM integration
  */
-export const gameReducer = (state: GameState, action: GameAction): GameState => {
+export const gameReducer = async (state: GameState, action: GameAction): Promise<GameState> => {
   // Validate the action first
   if (!action.id || !action.type || !action.playerId) {
     console.error('Invalid action:', action);
     return state;
   }
+  
+  console.log(`[Game Reducer] Processing action: ${action.type} from player ${action.playerId}`);
   
   // Update the last update time
   let newState: GameState = {
@@ -27,28 +30,33 @@ export const gameReducer = (state: GameState, action: GameAction): GameState => 
   newState.actionHistory = [...newState.actionHistory, action];
   
   // Process the action based on its type
-  switch (action.type) {
-    case ActionType.GAME_INIT:
-      return handleGameInit(newState, action);
-      
-    case ActionType.PLAY_CARD:
-      return handlePlayCard(newState, action);
-      
-    case ActionType.END_TURN:
-      return handleEndTurn(newState, action);
-      
-    case ActionType.SELECT_CARDS:
-      return handleSelectCards(newState, action);
-      
-    case ActionType.APPLY_EFFECT:
-      return handleApplyEffect(newState, action);
-      
-    case ActionType.PROCESS_QUEUE:
-      return handleProcessQueue(newState, action);
-      
-    default:
-      console.warn(`Unknown action type: ${action.type}`);
-      return newState;
+  try {
+    switch (action.type) {
+      case ActionType.GAME_INIT:
+        return handleGameInit(newState, action);
+        
+      case ActionType.PLAY_CARD:
+        return await handlePlayCard(newState, action);
+        
+      case ActionType.END_TURN:
+        return handleEndTurn(newState, action);
+        
+      case ActionType.SELECT_CARDS:
+        return handleSelectCards(newState, action);
+        
+      case ActionType.APPLY_EFFECT:
+        return handleApplyEffect(newState, action);
+        
+      case ActionType.PROCESS_QUEUE:
+        return handleProcessQueue(newState, action);
+        
+      default:
+        console.warn(`Unknown action type: ${action.type}`);
+        return newState;
+    }
+  } catch (error) {
+    console.error(`[Game Reducer] Error processing action ${action.type}:`, error);
+    return newState; // Return current state if there's an error
   }
 };
 
@@ -90,7 +98,7 @@ const handleGameInit = (state: GameState, action: GameAction): GameState => {
 /**
  * Handle play card action
  */
-const handlePlayCard = (state: GameState, action: GameAction): GameState => {
+const handlePlayCard = async (state: GameState, action: GameAction): Promise<GameState> => {
   const { cardId, targetPlayerId } = action.payload || {};
   
   if (!cardId) {
@@ -112,41 +120,131 @@ const handlePlayCard = (state: GameState, action: GameAction): GameState => {
     return state;
   }
   
-  // In a real implementation, this would send the card and game state to the LLM for interpretation
-  // For now, we'll just handle the base effects
-  
-  let stateWithEffects = newState;
-  
-  if (playedCard.base_effects && Array.isArray(playedCard.base_effects)) {
-    // Process base effects
-    playedCard.base_effects.forEach(effect => {
-      const effectTarget = effect.target === 'self' ? action.playerId : targetPlayerId;
+  console.log(`[Game Reducer] Playing card: ${playedCard.name} (${playedCard.id})`);
+  console.log(`[Game Reducer] Base effects: ${JSON.stringify(playedCard.base_effects)}`);
+  console.log(`[Game Reducer] Wildcard effect: ${playedCard.wildcard_effect}`);
+
+  try {
+    // Use the LLM service to interpret the card effects
+    const { llmService } = await import('./llm-service');
+    
+    // Convert game state to format for LLM
+    const llmGameState = {
+      players: Object.entries(newState.players).reduce((acc, [id, player]) => {
+        acc[id] = {
+          id,
+          hp: player.hp,
+          maxHp: player.maxHp,
+          block: player.block,
+          energy: player.energy,
+          statusEffects: player.statusEffects || []
+        };
+        return acc;
+      }, {} as any),
+      activePlayerId: newState.activePlayerId,
+      turn: newState.turnNumber,
+      phase: newState.phase
+    };
+    
+    console.log(`[Game Reducer] Calling LLM service for card effect interpretation...`);
+    
+    // Interpret the card effects using the LLM service
+    const interpretation = await llmService.interpretCardEffects(
+      playedCard,
+      action.playerId,
+      llmGameState,
+      targetPlayerId
+    );
+    
+    console.log(`[Game Reducer] Received interpretation with ${interpretation.baseEffects.length} base effects and ${interpretation.wildcardEffects.length} wildcard effects`);
+    
+    // Process the interpreted effects
+    let stateWithEffects = newState;
+    
+    // Add base effects to queue
+    interpretation.baseEffects.forEach(effect => {
+      console.log(`[Game Reducer] Adding base effect to queue: ${effect.type} (${effect.value || 'no value'}) targeting ${effect.target}`);
       
-      if (!effectTarget) {
-        console.warn('No target for effect, skipping');
-        return;
-      }
-      
-      // Add the effect to the queue
       stateWithEffects = stateHelpers.addEffectToQueue(stateWithEffects, {
-        type: effect.effect_type,
+        type: effect.type,
         value: effect.value,
-        source: action.playerId,
-        target: effectTarget,
+        source: effect.source || action.playerId,
+        target: effect.target,
         card: cardId,
-        timing: 'immediate',
+        timing: effect.timing || 'immediate',
         actionId: action.id
       });
     });
+    
+    // Add wildcard effects to queue
+    interpretation.wildcardEffects.forEach(effect => {
+      console.log(`[Game Reducer] Adding wildcard effect to queue: ${effect.type} (${effect.value || 'no value'}) targeting ${effect.target}`);
+      
+      stateWithEffects = stateHelpers.addEffectToQueue(stateWithEffects, {
+        type: effect.type,
+        value: effect.value,
+        source: effect.source || action.playerId,
+        target: effect.target,
+        card: cardId,
+        timing: effect.timing || 'immediate',
+        actionId: action.id,
+        statusName: effect.statusName,
+        statusDescription: effect.statusDescription,
+        duration: effect.duration
+      });
+    });
+    
+    // Add narrative to game state for UI
+    stateWithEffects = {
+      ...stateWithEffects,
+      lastNarrative: interpretation.narrative
+    };
+    
+    // Process immediate effects
+    stateWithEffects = stateHelpers.processAllEffects(stateWithEffects);
+    
+    return {
+      ...stateWithEffects,
+      phase: 'action'
+    };
+  } catch (error) {
+    console.error(`[Game Reducer] Error interpreting card effects:`, error);
+    console.log(`[Game Reducer] Falling back to basic effect processing`);
+    
+    // Fallback: Just process the base effects directly
+    let stateWithEffects = newState;
+    
+    if (playedCard.base_effects && Array.isArray(playedCard.base_effects)) {
+      // Process base effects
+      playedCard.base_effects.forEach(effect => {
+        const effectTarget = effect.target === 'self' ? action.playerId : targetPlayerId;
+        
+        if (!effectTarget) {
+          console.warn('No target for effect, skipping');
+          return;
+        }
+        
+        // Add the effect to the queue
+        stateWithEffects = stateHelpers.addEffectToQueue(stateWithEffects, {
+          type: effect.effect_type,
+          value: effect.value,
+          source: action.playerId,
+          target: effectTarget,
+          card: cardId,
+          timing: 'immediate',
+          actionId: action.id
+        });
+      });
+    }
+    
+    // Process immediate effects
+    stateWithEffects = stateHelpers.processAllEffects(stateWithEffects);
+    
+    return {
+      ...stateWithEffects,
+      phase: 'action'
+    };
   }
-  
-  // Process immediate effects
-  stateWithEffects = stateHelpers.processAllEffects(stateWithEffects);
-  
-  return {
-    ...stateWithEffects,
-    phase: 'action'
-  };
 };
 
 /**

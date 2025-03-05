@@ -10,7 +10,7 @@ import { TurnIndicator } from './TurnIndicator';
 import { EffectDisplay } from './EffectDisplay';
 
 export function GameBoard() {
-  const { gameState, getCurrentPlayer, getOpponent } = useGame();
+  const { gameState, uiState, getCurrentPlayer, getOpponent } = useGame();
   
   const currentPlayer = getCurrentPlayer();
   const opponent = getOpponent();
@@ -40,11 +40,18 @@ export function GameBoard() {
         <div className="flex-1 flex justify-center items-center relative my-4">
           {/* Effect visualization area */}
           <div className="w-full h-full flex justify-center items-center">
-            <EffectDisplay />
+            {uiState.isProcessing ? (
+              <div className="bg-black/40 p-6 rounded-lg text-center">
+                <div className="animate-spin h-12 w-12 border-4 border-purple-500 border-t-transparent rounded-full mx-auto mb-4"></div>
+                <div className="text-xl">Processing effects...</div>
+              </div>
+            ) : (
+              <EffectDisplay />
+            )}
           </div>
           
-          {/* Game log (floating on right side) */}
-          <div className="absolute right-8 top-0 bottom-0 w-72">
+          {/* Game log (floating in bottom right) */}
+          <div className="absolute right-8 bottom-8 w-96 h-64">
             <GameLog />
           </div>
         </div>

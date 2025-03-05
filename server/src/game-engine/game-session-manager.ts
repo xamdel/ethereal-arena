@@ -112,10 +112,10 @@ export const addPlayerToSession = (
 /**
  * Process a game action
  */
-export const processAction = (
+export const processAction = async (
   gameId: string, 
   action: GameAction
-): { session: GameSession | null; error?: string } => {
+): Promise<{ session: GameSession | null; error?: string }> => {
   const session = getGameSession(gameId);
   
   if (!session) {
@@ -132,101 +132,141 @@ export const processAction = (
     return { session: null, error: 'Player not in game session' };
   }
   
-  // Process the action
-  const newGameState = gameReducer(session.gameState, action);
-  
-  // Update the session
-  session.gameState = newGameState;
-  session.lastActive = Date.now();
-  
-  // Handle AI turn if it's a single player game and it's the AI's turn
-  if (
-    session.gameState.activePlayerId === 'ai-player' && 
-    session.players.includes('ai-player')
-  ) {
-    // Process the AI turn
-    session.gameState = processAITurn(session.gameState);
+  try {
+    console.log(`[GameSessionManager] Processing action ${action.type} for game ${gameId}`);
+    
+    // Process the action - now async!
+    const newGameState = await gameReducer(session.gameState, action);
+    
+    // Update the session
+    session.gameState = newGameState;
+    session.lastActive = Date.now();
+    
+    // Handle AI turn if it's a single player game and it's the AI's turn
+    if (
+      session.gameState.activePlayerId === 'ai-player' && 
+      session.players.includes('ai-player')
+    ) {
+      console.log(`[GameSessionManager] Processing AI turn for game ${gameId}`);
+      // Process the AI turn - now async
+      session.gameState = await processAITurn(session.gameState);
+    }
+    
+    // Update the session in storage
+    gameSessions[gameId] = session;
+    
+    console.log(`[GameSessionManager] Action processed successfully`);
+    return { session };
+  } catch (error) {
+    console.error(`[GameSessionManager] Error processing action:`, error);
+    return { session: null, error: `Error processing action: ${error instanceof Error ? error.message : 'Unknown error'}` };
   }
-  
-  // Update the session in storage
-  gameSessions[gameId] = session;
-  
-  return { session };
 };
 
 /**
  * Process an AI turn
  * This is a simple implementation that just plays random cards
+ * Now supports async operations for LLM integration
  */
-export const processAITurn = (state: GameState): GameState => {
+export const processAITurn = async (state: GameState): Promise<GameState> => {
   if (state.activePlayerId !== 'ai-player') {
     return state;
   }
   
+  console.log(`[AI Turn] Starting AI turn`);
+  
   // Start the AI turn
   let currentState = turnManager.startTurn(state);
   
-  // Process the draw phase
-  currentState = turnManager.processDraw(currentState);
-  
-  // AI logic: play cards randomly until out of energy
-  const aiPlayer = currentState.players['ai-player'];
-  
-  if (aiPlayer && aiPlayer.hand.length > 0) {
-    // Get opponent ID
-    const opponentId = Object.keys(currentState.players).find(id => id !== 'ai-player');
+  try {
+    // Process the draw phase - this might be async now
+    console.log(`[AI Turn] Processing draw phase`);
+    currentState = await turnManager.processDraw(currentState);
     
-    if (!opponentId) {
-      console.error('No opponent found for AI');
-      return turnManager.endTurn(currentState);
-    }
+    // AI logic: play cards randomly until out of energy
+    const aiPlayer = currentState.players['ai-player'];
     
-    // Play cards while we have energy and cards
-    let aiActionState = { ...currentState };
-    
-    while (aiPlayer.energy > 0 && aiPlayer.hand.length > 0) {
-      // Find playable cards (that we have energy for)
-      const playableCards = aiPlayer.hand.filter(card => card.cost <= aiPlayer.energy);
+    if (aiPlayer && aiPlayer.hand.length > 0) {
+      console.log(`[AI Turn] AI has ${aiPlayer.hand.length} cards and ${aiPlayer.energy} energy`);
       
-      if (playableCards.length === 0) {
-        break;
+      // Get opponent ID
+      const opponentId = Object.keys(currentState.players).find(id => id !== 'ai-player');
+      
+      if (!opponentId) {
+        console.error('[AI Turn] No opponent found for AI');
+        return turnManager.endTurn(currentState);
       }
       
-      // Choose a random card to play
-      const cardToPlay = playableCards[Math.floor(Math.random() * playableCards.length)];
+      // Play cards while we have energy and cards
+      let aiActionState = { ...currentState };
       
-      // Create play card action
-      const playCardAction: GameAction = {
-        id: uuidv4(),
-        type: ActionType.PLAY_CARD,
-        playerId: 'ai-player',
-        payload: {
-          cardId: cardToPlay.id,
-          targetPlayerId: opponentId
-        },
-        timestamp: Date.now(),
-        gameId: state.id,
-        validated: true
-      };
+      // Limit the number of cards the AI plays per turn for performance
+      const maxCardsToPlay = 3;
+      let cardsPlayed = 0;
       
-      // Process the action
-      aiActionState = gameReducer(aiActionState, playCardAction);
-      
-      // Update the AI player reference
-      const updatedAiPlayer = aiActionState.players['ai-player'];
-      
-      // Break if the game ended or something went wrong
-      if (!updatedAiPlayer || aiActionState.winner) {
-        break;
+      while (aiPlayer.energy > 0 && aiPlayer.hand.length > 0 && cardsPlayed < maxCardsToPlay) {
+        // Find playable cards (that we have energy for)
+        const playableCards = aiPlayer.hand.filter(card => card.cost <= aiPlayer.energy);
+        
+        if (playableCards.length === 0) {
+          console.log(`[AI Turn] No more playable cards`);
+          break;
+        }
+        
+        // Choose a random card to play
+        const cardToPlay = playableCards[Math.floor(Math.random() * playableCards.length)];
+        console.log(`[AI Turn] Playing card: ${cardToPlay.name} (${cardToPlay.cost} energy)`);
+        
+        // Create play card action
+        const playCardAction: GameAction = {
+          id: uuidv4(),
+          type: ActionType.PLAY_CARD,
+          playerId: 'ai-player',
+          payload: {
+            cardId: cardToPlay.id,
+            targetPlayerId: opponentId
+          },
+          timestamp: Date.now(),
+          gameId: state.id,
+          validated: true
+        };
+        
+        try {
+          // Process the action - now async!
+          console.log(`[AI Turn] Processing play card action`);
+          aiActionState = await gameReducer(aiActionState, playCardAction);
+          cardsPlayed++;
+          
+          // Update the AI player reference for next iteration
+          const updatedAiPlayer = aiActionState.players['ai-player'];
+          
+          // Break if the game ended or something went wrong
+          if (!updatedAiPlayer || aiActionState.winner) {
+            console.log(`[AI Turn] Game ended or AI player not found`);
+            break;
+          }
+          
+          console.log(`[AI Turn] AI now has ${updatedAiPlayer.hand.length} cards and ${updatedAiPlayer.energy} energy`);
+        } catch (error) {
+          console.error(`[AI Turn] Error playing card:`, error);
+          break;
+        }
       }
+      
+      console.log(`[AI Turn] AI played ${cardsPlayed} cards, ending turn`);
+      
+      // End the AI turn
+      return turnManager.endTurn(aiActionState);
     }
     
-    // End the AI turn
-    return turnManager.endTurn(aiActionState);
+    console.log(`[AI Turn] AI has no cards or energy, ending turn`);
+    
+    // If no cards or energy, just end the turn
+    return turnManager.endTurn(currentState);
+  } catch (error) {
+    console.error(`[AI Turn] Error in AI turn:`, error);
+    return turnManager.endTurn(currentState);
   }
-  
-  // If no cards or energy, just end the turn
-  return turnManager.endTurn(currentState);
 };
 
 /**
