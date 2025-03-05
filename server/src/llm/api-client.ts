@@ -1,5 +1,5 @@
 import dotenv from 'dotenv';
-import { AnthropicClient } from '@anthropic-ai/sdk';
+import OpenAI from 'openai';
 
 // Load environment variables
 dotenv.config();
@@ -34,17 +34,21 @@ interface LLMClientConfig {
   defaultModel: string;
   maxRetries: number;
   retryDelay: number;
+  httpReferer?: string;
+  xTitle?: string;
 }
 
 // Default configuration
 const DEFAULT_CONFIG: LLMClientConfig = {
-  defaultModel: 'claude-3-opus-20240229',
+  defaultModel: 'google/gemini-2.0-pro-exp-02-05:free',
   maxRetries: 3,
   retryDelay: 1000,
+  // httpReferer: 'https://etherealarena.com',
+  // xTitle: 'Ethereal Arena', 
 };
 
 export class LLMClient {
-  private anthropic: AnthropicClient;
+  private openai: OpenAI;
   private config: LLMClientConfig;
 
   constructor(config: Partial<LLMClientConfig> = {}) {
@@ -55,13 +59,20 @@ export class LLMClient {
     };
 
     // Use provided API key or fall back to environment variable
-    const apiKey = this.config.apiKey || process.env.ANTHROPIC_API_KEY;
-    
+    const apiKey = this.config.apiKey || process.env.OPENROUTER_API_KEY;
+
     if (!apiKey) {
-      throw new Error('ANTHROPIC_API_KEY is required. Provide it in .env or via constructor options.');
+      throw new Error('OPENROUTER_API_KEY is required. Provide it in .env or via constructor options.');
     }
 
-    this.anthropic = new AnthropicClient({ apiKey });
+    this.openai = new OpenAI({
+      baseURL: 'https://openrouter.ai/api/v1',
+      apiKey,
+      defaultHeaders: {
+        'HTTP-Referer': this.config.httpReferer,
+        'X-Title': this.config.xTitle,
+      },
+    });
   }
 
   /**
@@ -86,36 +97,44 @@ export class LLMClient {
     try {
       // Implement retry logic for transient errors
       let lastError: Error | null = null;
-      
+
       for (let attempt = 0; attempt < this.config.maxRetries; attempt++) {
         try {
-          const response = await this.anthropic.messages.create({
+          const completion = await this.openai.chat.completions.create({
             model,
+            messages: [
+              {
+                role: 'system',
+                content: systemPrompt,
+              },
+              {
+                role: 'user',
+                content: prompt,
+              },
+            ],
             max_tokens: maxTokens,
             temperature,
-            system: systemPrompt,
-            messages: [{ role: 'user', content: prompt }]
           });
 
           // Extract the content from the response
-          const content = response.content[0].text;
-          
+          const content = completion.choices[0].message.content || '';
+
           return {
             content,
-            model: response.model,
-            promptTokens: response.usage.input_tokens,
-            completionTokens: response.usage.output_tokens,
-            totalTokens: response.usage.input_tokens + response.usage.output_tokens,
+            model: completion.model,
+            promptTokens: completion.usage?.prompt_tokens || 0,
+            completionTokens: completion.usage?.completion_tokens || 0,
+            totalTokens: completion.usage?.total_tokens || 0,
           };
         } catch (error: any) {
           lastError = error;
-          
+
           // Determine if we should retry based on error type
           const shouldRetry = this.isRetryableError(error);
           if (!shouldRetry) {
             break;
           }
-          
+
           // Wait before retrying
           if (attempt < this.config.maxRetries - 1) {
             await this.delay(this.config.retryDelay * Math.pow(2, attempt));
@@ -138,17 +157,17 @@ export class LLMClient {
     if (error.status === 429) {
       return true;
     }
-    
+
     // Server errors (5xx) should be retried
     if (error.status >= 500 && error.status < 600) {
       return true;
     }
-    
+
     // Network errors should be retried
     if (error.name === 'FetchError' || error.code === 'ECONNRESET' || error.code === 'ETIMEDOUT') {
       return true;
     }
-    
+
     return false;
   }
 
@@ -169,8 +188,10 @@ export class LLMClient {
     let status: number | undefined = undefined;
     let message = error.message || 'Unknown error occurred';
 
-    if (error.status) {
-      status = error.status;
+    if (error.response?.status) {
+      status = error.response.status;
+      message = error.response.data?.error?.message || message;
+
       if (status === 429) {
         type = 'rate_limit';
         message = 'Rate limit exceeded';
