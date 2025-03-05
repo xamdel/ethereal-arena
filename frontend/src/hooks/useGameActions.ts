@@ -17,7 +17,41 @@ export function useGameActions() {
   };
 
   // Initialize a new game
-  const initGame = (isSinglePlayer: boolean = true) => {
+  const initGame = (isSinglePlayer: boolean = true, useMockData: boolean = true) => {
+    // Check if we should use mock data for testing UI (development mode)
+    if (useMockData && process.env.NODE_ENV === 'development') {
+      // We'll load mock data asynchronously
+      import('@/utils/mockData').then(({ createMockGameState }) => {
+        // Use mock data for testing the UI
+        const mockGameState = createMockGameState();
+        
+        const action: GameAction = {
+          id: generateActionId(),
+          type: ActionType.GAME_INIT,
+          playerId: 'system',
+          payload: {
+            // Use mock data for testing
+            ...mockGameState,
+            isMultiplayer: !isSinglePlayer
+          },
+          timestamp: Date.now(),
+          gameId: mockGameState.id,
+          validated: true
+        };
+  
+        dispatch(action);
+      }).catch(error => {
+        console.error("Error loading mock data:", error);
+        initializeEmptyGame(isSinglePlayer);
+      });
+    } else {
+      // Use normal initialization (empty state to be filled by server)
+      initializeEmptyGame(isSinglePlayer);
+    }
+  };
+  
+  // Helper for initializing with empty game state
+  const initializeEmptyGame = (isSinglePlayer: boolean) => {
     const action: GameAction = {
       id: generateActionId(),
       type: ActionType.GAME_INIT,

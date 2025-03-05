@@ -52,26 +52,147 @@ function gameStateReducer(state: GameState, action: GameAction): GameState {
       };
     
     case ActionType.PLAY_CARD:
-      // In a full implementation, this would handle card play logic
-      // For now, it's a placeholder
+      // For UI testing, we'll implement some basic logic
+      const { cardId, targetPlayerId } = action.payload;
+      const activePlayer = state.players[state.activePlayerId];
+      
+      // Find the card in the player's hand
+      const cardIndex = activePlayer.hand.findIndex(card => card.id === cardId);
+      if (cardIndex === -1) return state; // Card not found
+      
+      const card = activePlayer.hand[cardIndex];
+      
+      // Check if player has enough energy
+      if (activePlayer.energy < card.cost) return state;
+      
+      // Remove the card from hand and add to discard
+      const updatedHand = [...activePlayer.hand];
+      const removedCard = updatedHand.splice(cardIndex, 1)[0];
+      
+      const updatedPlayers = {
+        ...state.players,
+        [state.activePlayerId]: {
+          ...activePlayer,
+          hand: updatedHand,
+          discard: [...activePlayer.discard, removedCard],
+          energy: activePlayer.energy - card.cost
+        }
+      };
+      
+      // For testing, we'll add a simple effect to the queue
+      const effectType = card.base_effects[0]?.effect_type || "unknown";
+      const effectValue = card.base_effects[0]?.value || 0;
+      const effectTarget = card.base_effects[0]?.target || "self";
+      
+      const targetId = effectTarget === "opponent" 
+        ? Object.keys(state.players).find(id => id !== state.activePlayerId) 
+        : state.activePlayerId;
+        
+      // Add a new effect to the queue
+      const newEffect = {
+        id: Math.random().toString(),
+        type: effectType,
+        value: effectValue,
+        source: state.activePlayerId,
+        target: targetId || "",
+        card: cardId,
+        timing: "immediate" as const,
+        timestamp: Date.now(),
+        actionId: action.id
+      };
+        
       return {
         ...state,
+        players: updatedPlayers,
+        effectQueue: [...state.effectQueue, newEffect],
+        actionHistory: [...state.actionHistory, action],
         lastUpdateTime: Date.now()
       };
     
     case ActionType.END_TURN:
-      // In a full implementation, this would handle turn end logic
-      // For now, it's a placeholder
+      // Simple turn end logic for testing UI
+      // Get opponent ID (for a 2-player game)
+      const currentPlayerId = state.activePlayerId;
+      const nextPlayerId = Object.keys(state.players).find(id => id !== currentPlayerId);
+      
+      if (!nextPlayerId) return state;
+      
+      // Update player active status
+      const updatedPlayers = {
+        ...state.players,
+        [currentPlayerId]: {
+          ...state.players[currentPlayerId],
+          isActive: false
+        },
+        [nextPlayerId]: {
+          ...state.players[nextPlayerId],
+          isActive: true,
+          // Refresh energy for next player
+          energy: state.players[nextPlayerId].maxEnergy
+        }
+      };
+      
       return {
         ...state,
+        players: updatedPlayers,
+        activePlayerId: nextPlayerId,
+        phase: "turnStart",
+        turnNumber: state.turnNumber + 1,
+        actionHistory: [...state.actionHistory, action],
         lastUpdateTime: Date.now()
       };
     
     case ActionType.PROCESS_QUEUE:
-      // In a full implementation, this would process the effect queue
-      // For now, it's a placeholder
+      // Simple queue processing for testing UI
+      if (state.effectQueue.length === 0) return state;
+      
+      // Process the first effect in the queue
+      const [effect, ...remainingEffects] = state.effectQueue;
+      
+      // Apply effect based on type (simple implementation for testing)
+      const players = {...state.players};
+      
+      if (effect.type === "damage" && effect.value) {
+        const targetPlayer = players[effect.target];
+        // Apply damage, considering block
+        const blockAbsorbed = Math.min(targetPlayer.block, effect.value);
+        const remainingDamage = effect.value - blockAbsorbed;
+        
+        players[effect.target] = {
+          ...targetPlayer,
+          block: targetPlayer.block - blockAbsorbed,
+          hp: Math.max(0, targetPlayer.hp - remainingDamage)
+        };
+      }
+      
+      if (effect.type === "heal" && effect.value) {
+        const targetPlayer = players[effect.target];
+        players[effect.target] = {
+          ...targetPlayer,
+          hp: Math.min(targetPlayer.maxHp, targetPlayer.hp + effect.value)
+        };
+      }
+      
+      if (effect.type === "block" && effect.value) {
+        const targetPlayer = players[effect.target];
+        players[effect.target] = {
+          ...targetPlayer,
+          block: targetPlayer.block + effect.value
+        };
+      }
+      
+      if (effect.type === "energy" && effect.value) {
+        const targetPlayer = players[effect.target];
+        players[effect.target] = {
+          ...targetPlayer,
+          energy: Math.min(targetPlayer.maxEnergy, targetPlayer.energy + effect.value)
+        };
+      }
+      
       return {
         ...state,
+        players,
+        effectQueue: remainingEffects,
         lastUpdateTime: Date.now()
       };
     
