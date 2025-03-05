@@ -36,12 +36,16 @@ router.post('/games/:gameId/cards', async (req, res) => {
       phase: gameSession.gameState.phase
     };
     
+    console.log(`Generating ${count} cards for player ${playerId} in game ${gameId}`);
+    
     // Generate cards
     const cards = await llmService.generateCardsForPlayer(
       playerId,
       llmGameState,
       count
     );
+    
+    console.log(`Generated ${cards.length} cards successfully`);
     
     // Return the generated cards
     res.json({

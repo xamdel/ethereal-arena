@@ -44,8 +44,8 @@ interface RawCardResponse {
 export class CardGenerator {
   private llmClient: LLMClient;
 
-  constructor(llmClient: LLMClient = llmClient) {
-    this.llmClient = llmClient;
+  constructor(client?: LLMClient) {
+    this.llmClient = client || llmClient;
   }
 
   /**
@@ -237,5 +237,13 @@ Guidelines:
   }
 }
 
-// Export a singleton instance for convenience
-export const cardGenerator = new CardGenerator();
+// Export a lazy-loaded singleton instance for convenience
+export const cardGenerator = (() => {
+  let instance: CardGenerator | null = null;
+  return () => {
+    if (!instance) {
+      instance = new CardGenerator();
+    }
+    return instance;
+  };
+})()();

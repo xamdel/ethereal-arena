@@ -37,11 +37,17 @@ export class LLMService {
     gameState: LLMGameState,
     count: number = 5
   ): Promise<Card[]> {
+    console.log(`LLM Service: Generating ${count} cards for player ${playerId}`);
+    console.log(`Game state has ${Object.keys(gameState.players).length} players`);
+    
     const player = gameState.players[playerId];
     
     if (!player) {
+      console.error(`Player with ID ${playerId} not found in game state`);
       throw new Error(`Player with ID ${playerId} not found in game state`);
     }
+    
+    console.log(`Creating context for player: HP=${player.hp}/${player.maxHp}, Block=${player.block}, Energy=${player.energy}`);
     
     // Create player context for card generation
     const playerContext = {
@@ -49,15 +55,24 @@ export class LLMService {
       maxHp: player.maxHp,
       block: player.block,
       energy: player.energy,
-      statusEffects: player.statusEffects.map(effect => ({
+      statusEffects: player.statusEffects?.map(effect => ({
         name: effect.name,
         description: effect.description,
         duration: effect.duration
-      }))
+      })) || []
     };
     
-    // Generate cards
-    return generateCards(count, playerContext);
+    console.log(`Calling card generator to generate ${count} cards...`);
+    
+    try {
+      // Generate cards
+      const cards = await generateCards(count, playerContext);
+      console.log(`Successfully generated ${cards.length} cards`);
+      return cards;
+    } catch (error) {
+      console.error('Error in card generation:', error);
+      throw error;
+    }
   }
   
   /**

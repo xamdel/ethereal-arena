@@ -232,10 +232,12 @@ export const processAITurn = (state: GameState): GameState => {
 /**
  * Start a game (initialize first turn)
  */
-export const startGame = (gameId: string): GameSession | null => {
+export const startGame = async (gameId: string): Promise<GameSession | null> => {
+  console.log(`Starting game with ID: ${gameId}`);
   const session = getGameSession(gameId);
   
   if (!session) {
+    console.error(`Game session not found with ID: ${gameId}`);
     return null;
   }
   
@@ -245,17 +247,42 @@ export const startGame = (gameId: string): GameSession | null => {
     return null;
   }
   
+  console.log(`Game has ${session.players.length} players: ${session.players.join(', ')}`);
+  console.log(`Active player: ${session.gameState.activePlayerId}`);
+  
   // Start the first turn for the active player
   session.gameState = turnManager.startTurn(session.gameState);
   
-  // Process the draw phase to generate initial cards
-  session.gameState = turnManager.processDraw(session.gameState);
-  
-  // Update the session
-  session.lastActive = Date.now();
-  gameSessions[gameId] = session;
-  
-  return session;
+  // Process the draw phase to generate initial cards using LLM
+  console.log(`Calling processDraw for player ${session.gameState.activePlayerId}`);
+  try {
+    session.gameState = await turnManager.processDraw(session.gameState);
+    
+    // Log player hand sizes after draw
+    Object.keys(session.gameState.players).forEach(playerId => {
+      const handSize = session.gameState.players[playerId].hand?.length || 0;
+      console.log(`Player ${playerId} hand size: ${handSize}`);
+      
+      // Log first few cards for debugging
+      if (handSize > 0) {
+        const cards = session.gameState.players[playerId].hand.slice(0, 3);
+        console.log(`Sample cards for player ${playerId}:`);
+        cards.forEach((card, i) => {
+          console.log(`  Card ${i+1}: ${card.name} (${card.cost} energy) - ${card.description}`);
+        });
+      }
+    });
+    
+    // Update the session
+    session.lastActive = Date.now();
+    gameSessions[gameId] = session;
+    
+    console.log(`Game started successfully, active player: ${session.gameState.activePlayerId}`);
+    return session;
+  } catch (error) {
+    console.error('Error starting game:', error);
+    return null;
+  }
 };
 
 /**

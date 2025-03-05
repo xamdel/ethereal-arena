@@ -112,3 +112,26 @@ export const joinGame = async (
 
   return response.json();
 };
+
+/**
+ * Start a game
+ * @param gameId Game identifier
+ */
+export const startGame = async (
+  gameId: string
+): Promise<{ gameId: string; gameState: GameState }> => {
+  console.log(`Starting game: ${gameId}`);
+  const response = await fetch(`${API_BASE_URL}/games/${gameId}/start`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+  });
+
+  if (!response.ok) {
+    const error = await response.json();
+    throw new Error(error.message || 'Failed to start game');
+  }
+
+  return response.json();
+};

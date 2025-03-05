@@ -17,7 +17,13 @@ router.post('/games', (req, res) => {
   }
   
   // Create a new game session using the game engine
+  console.log(`Creating new game session for player ${playerId} (${playerName}), singlePlayer: ${isSinglePlayer}`);
   const gameSession = gameEngine.createGameSession(playerId, playerName, isSinglePlayer);
+  
+  // Log the created game state
+  console.log(`Game session created with ID: ${gameSession.id}`);
+  console.log(`Game state players: ${Object.keys(gameSession.gameState.players).length}`);
+  console.log(`Game state active player: ${gameSession.gameState.activePlayerId}`);
   
   // Return the created game session
   res.status(201).json({ 
@@ -101,21 +107,40 @@ router.post('/games/:gameId/join', (req, res) => {
  * Start a game
  * POST /api/games/:gameId/start
  */
-router.post('/games/:gameId/start', (req, res) => {
+router.post('/games/:gameId/start', async (req, res) => {
   const { gameId } = req.params;
   
-  // Start the game (initialize first turn)
-  const startedSession = gameEngine.startGame(gameId);
+  console.log(`Received request to start game: ${gameId}`);
   
-  if (!startedSession) {
-    return res.status(404).json({ error: 'Game not found' });
+  try {
+    // Start the game (initialize first turn) - this is now async to use LLM
+    const startedSession = await gameEngine.startGame(gameId);
+    
+    if (!startedSession) {
+      console.error(`Failed to start game: ${gameId}`);
+      return res.status(404).json({ error: 'Game not found' });
+    }
+    
+    console.log(`Game ${gameId} started successfully`);
+    console.log(`Active player: ${startedSession.gameState.activePlayerId}`);
+    console.log(`Player hand sizes:`);
+    Object.keys(startedSession.gameState.players).forEach(playerId => {
+      const handSize = startedSession.gameState.players[playerId].hand?.length || 0;
+      console.log(`- Player ${playerId}: ${handSize} cards`);
+    });
+    
+    res.json({
+      gameId,
+      message: 'Game started successfully',
+      gameState: startedSession.gameState
+    });
+  } catch (error) {
+    console.error('Error starting game:', error);
+    res.status(500).json({ 
+      error: 'Failed to start game',
+      details: error instanceof Error ? error.message : 'Unknown error'
+    });
   }
-  
-  res.json({
-    gameId,
-    message: 'Game started successfully',
-    gameState: startedSession.gameState
-  });
 });
 
 /**

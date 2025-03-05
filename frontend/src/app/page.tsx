@@ -1,25 +1,43 @@
 
 'use client';
 
-import { useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { GameBoard } from '@/components/game';
 import { useGameActions } from '@/hooks';
-import { LoadingSpinner, Notification } from '@/components/ui';
+import { LoadingSpinner, Notification, SplashScreen, DraftScreen } from '@/components/ui';
 import { useGame } from '@/context';
 import { ActionType } from '@/types';
 
 export default function Home() {
-  const { gameState, uiState, dispatchUI } = useGame();
-  const { initGame } = useGameActions();
+  const { gameState, uiState, dispatchUI, getCurrentPlayer } = useGame();
+  const { initGame, selectInitialCards } = useGameActions();
+  const [isCreatingGame, setIsCreatingGame] = useState(false);
   
-  // Initialize game on first load (for testing)
-  useEffect(() => {
-    if (!gameState.id) {
-      initGame(true, true); // Initialize single player game with mock data
-    }
-  }, [gameState.id, initGame]);
+  // Function to start a new game with the real backend
+  const handleNewGame = () => {
+    setIsCreatingGame(true);
+    
+    // Initialize a single player game with the real backend (false = don't use mock data)
+    initGame(true, false)
+      .catch(error => {
+        console.error("Error starting game:", error);
+        dispatchUI({ 
+          type: 'SET_ERROR', 
+          payload: { message: 'Failed to create a new game. Please try again.' } 
+        });
+      })
+      .finally(() => {
+        setIsCreatingGame(false);
+      });
+  };
   
-  // Automatically process effects in the queue for testing UI
+  // Handle draft completion
+  const handleDraftComplete = (selectedCardIds: string[]) => {
+    console.log('Draft completed, selected cards:', selectedCardIds);
+    selectInitialCards(selectedCardIds);
+  };
+  
+  // Automatically process effects in the queue
   const { dispatch } = useGame();
   
   useEffect(() => {
@@ -51,20 +69,45 @@ export default function Home() {
       return () => clearTimeout(timer);
     }
   }, [gameState.effectQueue, gameState.id, dispatchUI, dispatch]);
-  
-  // Show loading state if no game ID yet
+
+  // If no game is active, show the splash screen
   if (!gameState.id) {
+    return <SplashScreen onNewGame={handleNewGame} isLoading={isCreatingGame} />;
+  }
+  
+  // Game is initializing or loading
+  if (isCreatingGame || uiState.isProcessing) {
     return (
       <div className="h-screen bg-gray-900 text-white">
         <LoadingSpinner 
           fullscreen 
           size="large" 
-          message="Initializing Ethereal Arena..." 
+          message="Preparing your mystical journey..." 
         />
       </div>
     );
   }
   
+  // Check if we're in draft phase (phase is 'draw' and it's the first turn)
+  const player = getCurrentPlayer();
+  const isInDraftPhase = gameState.phase === 'draw' && 
+                         gameState.turnNumber === 0 && 
+                         player && 
+                         player.hand && 
+                         player.hand.length > 5;
+  
+  // Show draft screen if in draft phase
+  if (isInDraftPhase && player) {
+    return (
+      <DraftScreen 
+        cards={player.hand} 
+        onDraftComplete={handleDraftComplete} 
+        maxSelections={5}
+      />
+    );
+  }
+  
+  // Game is ready, show the game board
   return (
     <>
       <GameBoard />

@@ -50,26 +50,32 @@ export function Hand() {
     <div className="relative">
       {/* Hand container with flex layout and overlapping cards effect */}
       <div className="flex justify-center items-end space-x-[-20px] h-80 px-4">
-        {player.hand.map((card: Card) => (
-          <div 
-            key={card.id}
-            className="transform transition-transform hover:translate-y-[-20px]"
-            onClick={() => handleCardClick(card.id)}
-            onDoubleClick={() => handleCardDoubleClick(card.id)}
-          >
-            <CardDisplay
-              card={card}
-              isSelected={selectedCardId === card.id}
-              isPlayable={canPlayCard(card.id)}
-            />
+        {player.hand && player.hand.length > 0 ? (
+          player.hand.map((card: Card) => (
+            <div 
+              key={card.id}
+              className="transform transition-transform hover:translate-y-[-20px]"
+              onClick={() => handleCardClick(card.id)}
+              onDoubleClick={() => handleCardDoubleClick(card.id)}
+            >
+              <CardDisplay
+                card={card}
+                isSelected={selectedCardId === card.id}
+                isPlayable={canPlayCard(card.id)}
+              />
+            </div>
+          ))
+        ) : (
+          <div className="text-white text-center">
+            No cards in hand
           </div>
-        ))}
+        )}
       </div>
       
       {/* Card detail modal */}
-      {detailCardId && (
+      {detailCardId && player.hand && (
         <CardDetail
-          card={player.hand.find((card: Card) => card.id === detailCardId)!}
+          card={player.hand.find((card: Card) => card.id === detailCardId) || player.hand[0]}
           onClose={closeDetail}
         />
       )}

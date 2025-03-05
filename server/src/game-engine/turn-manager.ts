@@ -46,90 +46,160 @@ export const startTurn = (state: GameState): GameState => {
 };
 
 /**
- * Generate cards for a player's turn
- * In a real implementation, this would call the LLM card generator
+ * Generate cards for a player's turn using the LLM service
  */
-export const generateCards = (
+export const generateCards = async (
   state: GameState, 
   playerId: string, 
   count: number,
   isFirstTurn: boolean = false
-): GameState => {
+): Promise<GameState> => {
   if (!state.players[playerId]) {
     console.error('Player not found for card generation');
     return state;
   }
   
-  // In a real implementation, this would call the LLM
-  // For now, we'll create dummy cards
-  const generatedCards: Card[] = Array(count).fill(0).map((_, index) => {
-    const isAttack = index % 3 === 0;
-    const isBlock = index % 3 === 1;
-    // Rest are special cards
-    
-    return {
-      id: uuidv4(),
-      name: isAttack 
-        ? `Ethereal Strike ${index}` 
-        : isBlock 
-          ? `Arcane Barrier ${index}` 
-          : `Mystical Enchantment ${index}`,
-      cost: 1 + (index % 3),
-      base_effects: [
-        {
-          effect_type: isAttack ? 'damage' : isBlock ? 'block' : 'status',
-          value: (isAttack || isBlock) ? 5 + (index % 8) : 2,
-          target: isAttack ? 'opponent' : 'self'
-        }
-      ],
-      description: isAttack 
-        ? `Deal ${5 + (index % 8)} damage to your opponent.` 
-        : isBlock 
-          ? `Gain ${5 + (index % 8)} block.` 
-          : `Apply a mystical effect.`,
-      wildcard_effect: isAttack 
-        ? 'The target is marked, taking 2 additional damage from the next attack.' 
-        : isBlock 
-          ? 'If you have no block at the end of your turn, gain 3 block.' 
-          : 'Your next card costs 1 less energy to play.',
-      art_prompt: isAttack 
-        ? 'A crackling beam of ethereal energy' 
-        : isBlock 
-          ? 'A shimmering translucent barrier' 
-          : 'Swirling magical runes and symbols',
-      createdAt: Date.now(),
-      createdBy: 'system-generator'
-    };
-  });
+  console.log(`[Card Generation] Generating ${count} cards for player ${playerId}`);
   
-  // Add the generated cards to the player's hand
-  return stateHelpers.addCardsToHand(state, playerId, generatedCards);
-};
+  try {
+    // Import the LLM service
+    const { llmService } = await import('../game-engine/llm-service');
+    
+    // Convert game state to the format expected by the LLM service
+    const llmGameState = {
+      players: Object.entries(state.players).reduce((acc, [id, player]) => {
+        acc[id] = {
+          id,
+          hp: player.hp,
+          maxHp: player.maxHp,
+          block: player.block,
+          energy: player.energy,
+          statusEffects: player.statusEffects || []
+        };
+        return acc;
+      }, {} as any),
+      activePlayerId: state.activePlayerId,
+      turn: state.turnNumber,
+      phase: state.phase
+    };
+    
+    console.log(`[Card Generation] Calling LLM service with context:
+      - Player HP: ${state.players[playerId].hp}/${state.players[playerId].maxHp}
+      - Turn: ${state.turnNumber}
+      - Phase: ${state.phase}
+    `);
+    
+    // Try to generate cards using the LLM service
+    try {
+      // Call the LLM service to generate cards
+      const generatedCards = await llmService.generateCardsForPlayer(
+        playerId,
+        llmGameState,
+        count
+      );
+      
+      console.log(`[Card Generation] Successfully generated ${generatedCards.length} cards from LLM service`);
+      console.log(`[Card Generation] First card: ${generatedCards[0]?.name || 'None'}`);
+      
+      // Add the generated cards to the player's hand
+      return stateHelpers.addCardsToHand(state, playerId, generatedCards);
+    } catch (error) {
+      console.error('[Card Generation] Error generating cards with LLM service:', error);
+      console.log('[Card Generation] Falling back to mock card generation');
+      
+      // Fall back to mock card generation if the LLM service fails
+      const mockCards: Card[] = Array(count).fill(0).map((_, index) => {
+        const isAttack = index % 3 === 0;
+        const isBlock = index % 3 === 1;
+        // Rest are special cards
+        
+        return {
+          id: uuidv4(),
+          name: isAttack 
+            ? `Ethereal Strike ${index}` 
+            : isBlock 
+              ? `Arcane Barrier ${index}` 
+              : `Mystical Enchantment ${index}`,
+          cost: 1 + (index % 3),
+          base_effects: [
+            {
+              effect_type: isAttack ? 'damage' : isBlock ? 'block' : 'status',
+              value: (isAttack || isBlock) ? 5 + (index % 8) : 2,
+              target: isAttack ? 'opponent' : 'self'
+            }
+          ],
+          description: isAttack 
+            ? `Deal ${5 + (index % 8)} damage to your opponent.` 
+            : isBlock 
+              ? `Gain ${5 + (index % 8)} block.` 
+              : `Apply a mystical effect.`,
+          wildcard_effect: isAttack 
+            ? 'The target is marked, taking 2 additional damage from the next attack.' 
+            : isBlock 
+              ? 'If you have no block at the end of your turn, gain 3 block.' 
+              : 'Your next card costs 1 less energy to play.',
+          art_prompt: isAttack 
+            ? 'A crackling beam of ethereal energy' 
+            : isBlock 
+              ? 'A shimmering translucent barrier' 
+              : 'Swirling magical runes and symbols',
+          createdAt: Date.now(),
+          createdBy: 'mock-fallback'
+        };
+      });
+      
+      console.log(`[Card Generation] Generated ${mockCards.length} mock fallback cards`);
+      
+      // Add the mock cards to the player's hand
+      return stateHelpers.addCardsToHand(state, playerId, mockCards);
+    }
+  } catch (error) {
+    console.error('[Card Generation] Critical error in card generation:', error);
+    
+    // In case of a critical error, return the state unchanged
+    return state;
+  }
+}
 
 /**
  * Process the draw phase for the current active player
  * Generates cards based on the player's draw stat
  */
-export const processDraw = (state: GameState): GameState => {
+export const processDraw = async (state: GameState): Promise<GameState> => {
   if (!state.activePlayerId || !state.players[state.activePlayerId]) {
     console.error('No active player for draw phase');
     return state;
   }
   
+  console.log(`Processing draw phase for player: ${state.activePlayerId}`);
+  
   const activePlayer = state.players[state.activePlayerId];
   const isFirstTurn = state.turnNumber <= Object.keys(state.players).length;
   
+  console.log(`Is first turn: ${isFirstTurn}, Turn number: ${state.turnNumber}, Player count: ${Object.keys(state.players).length}`);
+  
   // Generate cards based on draw stat or first turn rules
   const cardCount = isFirstTurn ? 10 : activePlayer.draw;
+  console.log(`Generating ${cardCount} cards for player ${state.activePlayerId}`);
   
-  // Generate cards for the player
-  let newState = generateCards(state, state.activePlayerId, cardCount, isFirstTurn);
-  
-  // If it's the first turn, stay in the draw phase so the player can select cards
-  // Otherwise, move to the action phase
-  newState.phase = isFirstTurn ? TurnPhase.DRAW : TurnPhase.ACTION;
-  
-  return newState;
+  try {
+    // Generate cards for the player using the LLM service (or fallback to mock cards)
+    let newState = await generateCards(state, state.activePlayerId, cardCount, isFirstTurn);
+    
+    // Check if cards were added
+    const handSize = newState.players[state.activePlayerId].hand.length;
+    console.log(`Player hand size after generation: ${handSize}`);
+    
+    // If it's the first turn, stay in the draw phase so the player can select cards
+    // Otherwise, move to the action phase
+    newState.phase = isFirstTurn ? TurnPhase.DRAW : TurnPhase.ACTION;
+    
+    return newState;
+  } catch (error) {
+    console.error('Error in processDraw:', error);
+    // Return original state if there was an error
+    return state;
+  }
 };
 
 /**

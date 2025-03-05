@@ -17,37 +17,107 @@ export function useGameActions() {
   };
 
   // Initialize a new game
-  const initGame = (isSinglePlayer: boolean = true, useMockData: boolean = true) => {
-    // Check if we should use mock data for testing UI (development mode)
-    if (useMockData && process.env.NODE_ENV === 'development') {
-      // We'll load mock data asynchronously
-      import('@/utils/mockData').then(({ createMockGameState }) => {
-        // Use mock data for testing the UI
-        const mockGameState = createMockGameState();
-        
-        const action: GameAction = {
-          id: generateActionId(),
-          type: ActionType.GAME_INIT,
-          playerId: 'system',
-          payload: {
-            // Use mock data for testing
-            ...mockGameState,
-            isMultiplayer: !isSinglePlayer
-          },
-          timestamp: Date.now(),
-          gameId: mockGameState.id,
-          validated: true
-        };
-  
-        dispatch(action);
-      }).catch(error => {
-        console.error("Error loading mock data:", error);
+  const initGame = (isSinglePlayer: boolean = true, useMockData: boolean = true): Promise<void> => {
+    return new Promise(async (resolve, reject) => {
+      try {
+        // Check if we should use mock data for testing UI (development mode)
+        if (useMockData && process.env.NODE_ENV === 'development') {
+          // We'll load mock data asynchronously
+          const { createMockGameState } = await import('@/utils/mockData');
+          // Use mock data for testing the UI
+          const mockGameState = createMockGameState();
+          
+          const action: GameAction = {
+            id: generateActionId(),
+            type: ActionType.GAME_INIT,
+            playerId: 'system',
+            payload: {
+              // Use mock data for testing
+              ...mockGameState,
+              isMultiplayer: !isSinglePlayer
+            },
+            timestamp: Date.now(),
+            gameId: mockGameState.id,
+            validated: true
+          };
+    
+          dispatch(action);
+          resolve();
+        } else {
+          // For real backend connection, we need to create a game via API
+          const playerId = generateActionId();
+          
+          // Set UI to loading state
+          dispatchUI({ 
+            type: 'SET_PROCESSING', 
+            payload: { isProcessing: true } 
+          });
+          
+          // Import and use the API service
+          const { createGame, startGame } = await import('@/services/api');
+          
+          try {
+            // Call the backend API to create a new game
+            console.log(`Creating new game for player ${playerId}`);
+            const { gameId, gameState } = await createGame(
+              playerId,
+              'Player', // Default player name
+              isSinglePlayer
+            );
+            
+            console.log(`Game created with ID: ${gameId}`);
+            
+            // Now start the game to generate cards
+            console.log(`Starting game: ${gameId}`);
+            const { gameState: startedGameState } = await startGame(gameId);
+            
+            console.log(`Game started successfully`);
+            console.log(`Hand sizes after game start:`);
+            Object.keys(startedGameState.players).forEach(id => {
+              const handSize = startedGameState.players[id].hand?.length || 0;
+              console.log(`- Player ${id}: ${handSize} cards`);
+            });
+            
+            // Initialize with the returned game state
+            const action: GameAction = {
+              id: generateActionId(),
+              type: ActionType.GAME_INIT,
+              playerId: 'system',
+              payload: {
+                ...startedGameState,
+                isMultiplayer: !isSinglePlayer
+              },
+              timestamp: Date.now(),
+              gameId: gameId,
+              validated: true
+            };
+            
+            dispatch(action);
+            resolve();
+          } catch (error) {
+            console.error("Error creating game with backend:", error);
+            // Fall back to mock data
+            initializeEmptyGame(isSinglePlayer);
+            // Show error to user
+            dispatchUI({
+              type: 'SET_ERROR',
+              payload: { message: 'Failed to connect to game server. Using offline mode.' }
+            });
+            reject(error);
+          } finally {
+            // Reset loading state
+            dispatchUI({ 
+              type: 'SET_PROCESSING', 
+              payload: { isProcessing: false } 
+            });
+          }
+        }
+      } catch (error) {
+        console.error("Error in initGame:", error);
         initializeEmptyGame(isSinglePlayer);
-      });
-    } else {
-      // Use normal initialization (empty state to be filled by server)
-      initializeEmptyGame(isSinglePlayer);
-    }
+        reject(error);
+      }
+    });
   };
   
   // Helper for initializing with empty game state
@@ -176,6 +246,37 @@ export function useGameActions() {
       payload: { message: null }
     });
   };
+  
+  // Select initial cards after draft
+  const selectInitialCards = (selectedCardIds: string[]) => {
+    dispatchUI({ 
+      type: 'SET_PROCESSING', 
+      payload: { isProcessing: true } 
+    });
+    
+    const action: GameAction = {
+      id: generateActionId(),
+      type: ActionType.SELECT_CARDS,
+      playerId: gameState.activePlayerId,
+      payload: {
+        selectedCardIds
+      },
+      timestamp: Date.now(),
+      gameId: gameState.id,
+      validated: false
+    };
+    
+    // Dispatch the action
+    dispatch(action);
+    
+    // Reset UI state after processing
+    setTimeout(() => {
+      dispatchUI({ 
+        type: 'SET_PROCESSING', 
+        payload: { isProcessing: false } 
+      });
+    }, 500);
+  };
 
   return {
     initGame,
@@ -186,6 +287,7 @@ export function useGameActions() {
     showCardDetail,
     hideCardDetail,
     setError,
-    clearError
+    clearError,
+    selectInitialCards
   };
 }

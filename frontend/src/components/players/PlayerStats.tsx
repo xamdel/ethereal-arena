@@ -86,12 +86,12 @@ export function PlayerStats({ player, isOpponent = false }: PlayerStatsProps) {
       
       {/* Draw indicator */}
       <div className="flex items-center mb-3">
-        <span className="text-sm mr-2">Draw: {player.draw}</span>
-        <span className="text-sm">Deck: {player.deck.length}</span>
+        <span className="text-sm mr-2">Draw: {player.draw || 0}</span>
+        <span className="text-sm">Deck: {player.deck?.length || 0}</span>
       </div>
       
       {/* Status effects section */}
-      {player.statusEffects.length > 0 && (
+      {player.statusEffects?.length > 0 && (
         <div className="mt-2">
           <div 
             className="flex justify-between items-center cursor-pointer"

@@ -1,11 +1,14 @@
-// Export LLM client
-export { LLMClient, llmClient, LLMResponse, LLMAPIError } from './api-client';
+// Export types and classes
+export { LLMClient, LLMResponse, LLMAPIError } from './api-client';
+export { CardGenerator } from './card-generator';
+export { EffectInterpreter, InterpretedEffect } from './effect-interpreter';
 
-// Export card generator
-export { CardGenerator, cardGenerator } from './card-generator';
+// Export singleton instances
+import { llmClient } from './api-client';
+import { cardGenerator } from './card-generator';
+import { effectInterpreter } from './effect-interpreter';
 
-// Export effect interpreter
-export { EffectInterpreter, effectInterpreter, InterpretedEffect } from './effect-interpreter';
+export { llmClient, cardGenerator, effectInterpreter };
 
 // Convenience function to generate a batch of cards
 export async function generateCards(count: number = 5, playerContext?: any) {

@@ -54,8 +54,8 @@ interface EffectInterpretationResponse {
 export class EffectInterpreter {
   private llmClient: LLMClient;
 
-  constructor(llmClient: LLMClient = llmClient) {
-    this.llmClient = llmClient;
+  constructor(client?: LLMClient) {
+    this.llmClient = client || llmClient;
   }
 
   /**
@@ -229,5 +229,13 @@ Respond with a JSON object containing the interpreted effects. Example format:
   }
 }
 
-// Export a singleton instance for convenience
-export const effectInterpreter = new EffectInterpreter();
+// Export a lazy-loaded singleton instance for convenience
+export const effectInterpreter = (() => {
+  let instance: EffectInterpreter | null = null;
+  return () => {
+    if (!instance) {
+      instance = new EffectInterpreter();
+    }
+    return instance;
+  };
+})()();

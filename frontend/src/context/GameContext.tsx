@@ -108,6 +108,33 @@ function gameStateReducer(state: GameState, action: GameAction): GameState {
         actionHistory: [...state.actionHistory, action],
         lastUpdateTime: Date.now()
       };
+      
+    case ActionType.SELECT_CARDS:
+      // Handle card selection for draft phase
+      const { selectedCardIds } = action.payload;
+      const draftingPlayer = state.players[state.activePlayerId];
+      
+      if (!draftingPlayer) return state;
+      
+      // Filter the hand to keep only the selected cards
+      const draftedHand = draftingPlayer.hand.filter(card => 
+        selectedCardIds.includes(card.id)
+      );
+      
+      // Move to action phase
+      return {
+        ...state,
+        players: {
+          ...state.players,
+          [state.activePlayerId]: {
+            ...draftingPlayer,
+            hand: draftedHand
+          }
+        },
+        phase: 'action',
+        actionHistory: [...state.actionHistory, action],
+        lastUpdateTime: Date.now()
+      };
     
     case ActionType.END_TURN:
       // Simple turn end logic for testing UI

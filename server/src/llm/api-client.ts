@@ -218,5 +218,13 @@ export class LLMClient {
   }
 }
 
-// Export a singleton instance for convenience
-export const llmClient = new LLMClient();
+// Export a lazy-loaded singleton instance for convenience
+export const llmClient = (() => {
+  let instance: LLMClient | null = null;
+  return () => {
+    if (!instance) {
+      instance = new LLMClient();
+    }
+    return instance;
+  };
+})()();
