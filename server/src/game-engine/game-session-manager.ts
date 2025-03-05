@@ -1,0 +1,292 @@
+/**
+ * Game Session Manager
+ * Manages game sessions and transitions
+ */
+
+import { v4 as uuidv4 } from 'uuid';
+import { 
+  GameSession, 
+  GameState, 
+  GameAction, 
+  ActionType, 
+  Player 
+} from '../types';
+import { gameReducer } from './game-reducer';
+import * as turnManager from './turn-manager';
+import * as stateHelpers from './state-helpers';
+
+// In-memory storage for game sessions
+// In a production environment, this would be a database
+const gameSessions: Record<string, GameSession> = {};
+
+/**
+ * Create a new game session
+ */
+export const createGameSession = (
+  playerId: string, 
+  playerName: string, 
+  isSinglePlayer: boolean = true
+): GameSession => {
+  const gameId = uuidv4();
+  
+  // Create the initial game state
+  const initialGameState = stateHelpers.createInitialGameState(gameId, !isSinglePlayer);
+  
+  // Create the game session
+  const gameSession: GameSession = {
+    id: gameId,
+    gameState: initialGameState,
+    players: [playerId],
+    createdAt: Date.now(),
+    lastActive: Date.now(),
+    isActive: true
+  };
+  
+  // Add the first player
+  gameSession.gameState = stateHelpers.addPlayer(gameSession.gameState, playerId, playerName, false);
+  
+  // If it's a single player game, add an AI opponent
+  if (isSinglePlayer) {
+    gameSession.gameState = stateHelpers.addPlayer(
+      gameSession.gameState, 
+      'ai-player', 
+      'AI Opponent', 
+      true
+    );
+    
+    // Add the AI player ID to the session players
+    gameSession.players.push('ai-player');
+  }
+  
+  // Store the session
+  gameSessions[gameId] = gameSession;
+  
+  return gameSession;
+};
+
+/**
+ * Get a game session by ID
+ */
+export const getGameSession = (gameId: string): GameSession | null => {
+  return gameSessions[gameId] || null;
+};
+
+/**
+ * Add a player to a game session
+ */
+export const addPlayerToSession = (
+  gameId: string, 
+  playerId: string, 
+  playerName: string
+): GameSession | null => {
+  const session = getGameSession(gameId);
+  
+  if (!session) {
+    return null;
+  }
+  
+  // Check if the game already has the maximum number of players
+  if (session.players.length >= 2) {
+    console.error('Game is full');
+    return null;
+  }
+  
+  // Check if the player is already in the game
+  if (session.players.includes(playerId)) {
+    return session;
+  }
+  
+  // Add the player to the game state
+  session.gameState = stateHelpers.addPlayer(session.gameState, playerId, playerName, false);
+  
+  // Add the player to the session
+  session.players.push(playerId);
+  session.lastActive = Date.now();
+  
+  // Update the session in storage
+  gameSessions[gameId] = session;
+  
+  return session;
+};
+
+/**
+ * Process a game action
+ */
+export const processAction = (
+  gameId: string, 
+  action: GameAction
+): { session: GameSession | null; error?: string } => {
+  const session = getGameSession(gameId);
+  
+  if (!session) {
+    return { session: null, error: 'Game session not found' };
+  }
+  
+  // Validate the action
+  if (!action.id || !action.type || !action.playerId) {
+    return { session: null, error: 'Invalid action format' };
+  }
+  
+  // Check if the player is in the game
+  if (!session.players.includes(action.playerId)) {
+    return { session: null, error: 'Player not in game session' };
+  }
+  
+  // Process the action
+  const newGameState = gameReducer(session.gameState, action);
+  
+  // Update the session
+  session.gameState = newGameState;
+  session.lastActive = Date.now();
+  
+  // Handle AI turn if it's a single player game and it's the AI's turn
+  if (
+    session.gameState.activePlayerId === 'ai-player' && 
+    session.players.includes('ai-player')
+  ) {
+    // Process the AI turn
+    session.gameState = processAITurn(session.gameState);
+  }
+  
+  // Update the session in storage
+  gameSessions[gameId] = session;
+  
+  return { session };
+};
+
+/**
+ * Process an AI turn
+ * This is a simple implementation that just plays random cards
+ */
+export const processAITurn = (state: GameState): GameState => {
+  if (state.activePlayerId !== 'ai-player') {
+    return state;
+  }
+  
+  // Start the AI turn
+  let currentState = turnManager.startTurn(state);
+  
+  // Process the draw phase
+  currentState = turnManager.processDraw(currentState);
+  
+  // AI logic: play cards randomly until out of energy
+  const aiPlayer = currentState.players['ai-player'];
+  
+  if (aiPlayer && aiPlayer.hand.length > 0) {
+    // Get opponent ID
+    const opponentId = Object.keys(currentState.players).find(id => id !== 'ai-player');
+    
+    if (!opponentId) {
+      console.error('No opponent found for AI');
+      return turnManager.endTurn(currentState);
+    }
+    
+    // Play cards while we have energy and cards
+    let aiActionState = { ...currentState };
+    
+    while (aiPlayer.energy > 0 && aiPlayer.hand.length > 0) {
+      // Find playable cards (that we have energy for)
+      const playableCards = aiPlayer.hand.filter(card => card.cost <= aiPlayer.energy);
+      
+      if (playableCards.length === 0) {
+        break;
+      }
+      
+      // Choose a random card to play
+      const cardToPlay = playableCards[Math.floor(Math.random() * playableCards.length)];
+      
+      // Create play card action
+      const playCardAction: GameAction = {
+        id: uuidv4(),
+        type: ActionType.PLAY_CARD,
+        playerId: 'ai-player',
+        payload: {
+          cardId: cardToPlay.id,
+          targetPlayerId: opponentId
+        },
+        timestamp: Date.now(),
+        gameId: state.id,
+        validated: true
+      };
+      
+      // Process the action
+      aiActionState = gameReducer(aiActionState, playCardAction);
+      
+      // Update the AI player reference
+      const updatedAiPlayer = aiActionState.players['ai-player'];
+      
+      // Break if the game ended or something went wrong
+      if (!updatedAiPlayer || aiActionState.winner) {
+        break;
+      }
+    }
+    
+    // End the AI turn
+    return turnManager.endTurn(aiActionState);
+  }
+  
+  // If no cards or energy, just end the turn
+  return turnManager.endTurn(currentState);
+};
+
+/**
+ * Start a game (initialize first turn)
+ */
+export const startGame = (gameId: string): GameSession | null => {
+  const session = getGameSession(gameId);
+  
+  if (!session) {
+    return null;
+  }
+  
+  // Check if we have at least one player
+  if (session.players.length === 0) {
+    console.error('Cannot start game with no players');
+    return null;
+  }
+  
+  // Start the first turn for the active player
+  session.gameState = turnManager.startTurn(session.gameState);
+  
+  // Process the draw phase to generate initial cards
+  session.gameState = turnManager.processDraw(session.gameState);
+  
+  // Update the session
+  session.lastActive = Date.now();
+  gameSessions[gameId] = session;
+  
+  return session;
+};
+
+/**
+ * Clean up inactive game sessions
+ * This would be run on a schedule in a production environment
+ */
+export const cleanupInactiveSessions = (maxAgeMs: number = 24 * 60 * 60 * 1000): void => {
+  const now = Date.now();
+  
+  Object.keys(gameSessions).forEach(gameId => {
+    const session = gameSessions[gameId];
+    
+    if (now - session.lastActive > maxAgeMs) {
+      console.log(`Cleaning up inactive game session: ${gameId}`);
+      delete gameSessions[gameId];
+    }
+  });
+};
+
+/**
+ * Get all game sessions (for admin purposes)
+ */
+export const getAllGameSessions = (): GameSession[] => {
+  return Object.values(gameSessions);
+};
+
+/**
+ * Get sessions for a specific player
+ */
+export const getPlayerSessions = (playerId: string): GameSession[] => {
+  return Object.values(gameSessions).filter(session => 
+    session.players.includes(playerId) && session.isActive
+  );
+};
