@@ -5,6 +5,7 @@ import { useGameActions } from '@/hooks';
 import { CardDisplay } from './CardDisplay';
 import { CardDetail } from './CardDetail';
 import { useState } from 'react';
+import { Card } from '@/types/game';
 
 export function Hand() {
   const { gameState, uiState, getCurrentPlayer, canPlayCard } = useGame();
@@ -49,15 +50,15 @@ export function Hand() {
     <div className="relative">
       {/* Hand container with flex layout and overlapping cards effect */}
       <div className="flex justify-center items-end space-x-[-20px] h-80 px-4">
-        {player.hand.map((card) => (
+        {player.hand.map((card: Card) => (
           <div 
-            key={card.id} 
+            key={card.id}
             className="transform transition-transform hover:translate-y-[-20px]"
             onClick={() => handleCardClick(card.id)}
             onDoubleClick={() => handleCardDoubleClick(card.id)}
           >
-            <CardDisplay 
-              card={card} 
+            <CardDisplay
+              card={card}
               isSelected={selectedCardId === card.id}
               isPlayable={canPlayCard(card.id)}
             />
@@ -67,9 +68,9 @@ export function Hand() {
       
       {/* Card detail modal */}
       {detailCardId && (
-        <CardDetail 
-          card={player.hand.find(card => card.id === detailCardId)!} 
-          onClose={closeDetail} 
+        <CardDetail
+          card={player.hand.find((card: Card) => card.id === detailCardId)!}
+          onClose={closeDetail}
         />
       )}
     </div>

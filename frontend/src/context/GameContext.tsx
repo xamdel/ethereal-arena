@@ -69,7 +69,7 @@ function gameStateReducer(state: GameState, action: GameAction): GameState {
       const updatedHand = [...activePlayer.hand];
       const removedCard = updatedHand.splice(cardIndex, 1)[0];
       
-      const updatedPlayers = {
+      const playCardUpdatedPlayers = {
         ...state.players,
         [state.activePlayerId]: {
           ...activePlayer,
@@ -103,7 +103,7 @@ function gameStateReducer(state: GameState, action: GameAction): GameState {
         
       return {
         ...state,
-        players: updatedPlayers,
+        players: playCardUpdatedPlayers,
         effectQueue: [...state.effectQueue, newEffect],
         actionHistory: [...state.actionHistory, action],
         lastUpdateTime: Date.now()
@@ -118,7 +118,7 @@ function gameStateReducer(state: GameState, action: GameAction): GameState {
       if (!nextPlayerId) return state;
       
       // Update player active status
-      const updatedPlayers = {
+      const endTurnUpdatedPlayers = {
         ...state.players,
         [currentPlayerId]: {
           ...state.players[currentPlayerId],
@@ -134,7 +134,7 @@ function gameStateReducer(state: GameState, action: GameAction): GameState {
       
       return {
         ...state,
-        players: updatedPlayers,
+        players: endTurnUpdatedPlayers,
         activePlayerId: nextPlayerId,
         phase: "turnStart",
         turnNumber: state.turnNumber + 1,
