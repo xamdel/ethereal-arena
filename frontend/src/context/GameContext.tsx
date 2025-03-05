@@ -363,28 +363,58 @@ export function GameProvider({ children }: { children: ReactNode }) {
   
   // Utility functions
   const isCurrentPlayerActive = () => {
-    // Implementation would depend on how we identify the current player
-    // This is a placeholder
-    return true;
+    // For now, in a single-player game, the human player is always player one
+    // This approach simplifies the UI but will need to change for multiplayer
+    const humanPlayerId = Object.keys(gameState.players).find(id => !id.includes('ai'));
+    
+    // Check if the human player is the active player
+    return humanPlayerId === gameState.activePlayerId;
   };
   
   const getCurrentPlayer = () => {
-    // Placeholder implementation
+    // Get the active player from the game state
+    if (gameState.activePlayerId && gameState.players[gameState.activePlayerId]) {
+      return gameState.players[gameState.activePlayerId];
+    }
+    // Fallback to first player if no active player
     const playerId = Object.keys(gameState.players)[0];
     return playerId ? gameState.players[playerId] : null;
   };
   
   const getOpponent = () => {
-    // Placeholder implementation
-    const players = Object.values(gameState.players);
-    const currentPlayer = getCurrentPlayer();
-    return players.find(player => player.id !== currentPlayer?.id) || null;
+    // Get opponent (non-active player)
+    if (!gameState.activePlayerId) {
+      return null;
+    }
+    
+    // Find the player that is not the active player
+    const opponentId = Object.keys(gameState.players).find(
+      id => id !== gameState.activePlayerId
+    );
+    
+    return opponentId ? gameState.players[opponentId] : null;
   };
   
   const canPlayCard = (cardId: string) => {
-    // Placeholder implementation
-    // In a full implementation, this would check energy, card requirements, etc.
-    return isCurrentPlayerActive();
+    // First check if it's the player's turn
+    if (!isCurrentPlayerActive()) {
+      return false;
+    }
+    
+    // Get the active player
+    const player = getCurrentPlayer();
+    if (!player) {
+      return false;
+    }
+    
+    // Find the card in the player's hand
+    const card = player.hand.find(c => c.id === cardId);
+    if (!card) {
+      return false;
+    }
+    
+    // Check if the player has enough energy to play the card
+    return player.energy >= card.cost;
   };
   
   // State synchronization skeleton

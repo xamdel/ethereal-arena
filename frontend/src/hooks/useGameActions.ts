@@ -160,9 +160,8 @@ export function useGameActions() {
     try {
       console.log(`Playing card ${cardId}${targetPlayerId ? ` targeting ${targetPlayerId}` : ''}`);
       
-      // Get the current player
-      const currentPlayer = getCurrentPlayer();
-      const playerID = currentPlayer?.id || 'unknown';
+      // Use the active player ID directly from the game state
+      const playerID = gameState.activePlayerId || 'unknown';
       
       const action: GameAction = {
         id: generateActionId(),
@@ -208,9 +207,8 @@ export function useGameActions() {
       
       console.log('Ending turn');
       
-      // Get the current player
-      const currentPlayer = getCurrentPlayer();
-      const playerID = currentPlayer?.id || 'unknown';
+      // Use the active player ID directly from the game state
+      const playerID = gameState.activePlayerId || 'unknown';
       
       const action: GameAction = {
         id: generateActionId(),
