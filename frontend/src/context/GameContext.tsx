@@ -306,20 +306,58 @@ export function GameProvider({ children }: { children: ReactNode }) {
   const [uiState, dispatchUI] = useReducer(uiStateReducer, initialUIState);
   
   // Client/server adapter function
-  const dispatchAction = (action: GameAction) => {
-    // In multiplayer mode, this would send the action to the server first
-    if (gameState.isMultiplayer) {
-      // Placeholder for server communication
-      console.log('Sending action to server:', action);
-      // The actual dispatch would happen when the server confirms
+  const dispatchAction = async (action: GameAction) => {
+    try {
+      // Fix playerId if it's set to 'current'
+      if (action.playerId === 'current') {
+        const currentPlayer = getCurrentPlayer();
+        if (currentPlayer) {
+          action.playerId = currentPlayer.id;
+        }
+      }
       
-      // For now, we'll just dispatch locally with a delay to simulate network
-      setTimeout(() => {
+      console.log('Dispatching action:', action.type);
+      
+      // Send all actions to the server for processing
+      if (action.type !== ActionType.GAME_INIT) {
+        dispatchUI({ type: 'SET_PROCESSING', payload: { isProcessing: true } });
+        
+        try {
+          // Import and use the API service
+          const { submitAction } = await import('@/services/api');
+          
+          console.log(`Sending action ${action.type} to server for game ${action.gameId}`);
+          const result = await submitAction(action.gameId, action);
+          
+          console.log(`Server processed action, updated state received:`, result);
+          
+          // Update the local state with the server response
+          dispatch({
+            ...action,
+            type: ActionType.GAME_INIT, // Hack to replace entire state
+            payload: result.gameState,
+            validated: true
+          });
+          
+        } catch (error) {
+          console.error("Error communicating with server:", error);
+          dispatchUI({ 
+            type: 'SET_ERROR', 
+            payload: { message: 'Failed to communicate with game server. Trying local mode.' }
+          });
+          
+          // Fall back to local processing
+          dispatch(action);
+        } finally {
+          dispatchUI({ type: 'SET_PROCESSING', payload: { isProcessing: false } });
+        }
+      } else {
+        // Game init actions are processed locally
         dispatch(action);
-      }, 300);
-    } else {
-      // In single player, dispatch directly
-      dispatch(action);
+      }
+    } catch (error) {
+      console.error("Error in dispatchAction:", error);
+      dispatch(action); // Fallback to local
     }
   };
   

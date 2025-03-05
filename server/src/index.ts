@@ -66,7 +66,7 @@ io.on('connection', (socket) => {
   });
   
   // Handle game actions
-  socket.on('game-action', (data) => {
+  socket.on('game-action', async (data) => {
     const { gameId, action } = data;
     
     if (!gameId || !action) {
@@ -74,26 +74,38 @@ io.on('connection', (socket) => {
       return;
     }
     
-    // Process the action using the game engine
-    const gameEngine = require('./game-engine');
-    const result = gameEngine.processAction(gameId, action);
-    
-    if (!result.session) {
-      socket.emit('error', { 
-        message: result.error || 'Failed to process action' 
+    try {
+      console.log(`[Socket.IO] Received ${action.type} action for game ${gameId}`);
+      
+      // Process the action using the game engine - now async
+      const gameEngine = require('./game-engine');
+      const result = await gameEngine.processAction(gameId, action);
+      
+      if (!result.session) {
+        console.error(`[Socket.IO] Error processing action: ${result.error}`);
+        socket.emit('error', { 
+          message: result.error || 'Failed to process action' 
+        });
+        return;
+      }
+      
+      console.log(`[Socket.IO] Action processed successfully, broadcasting update`);
+      
+      // Broadcast the updated game state to all clients in the room
+      io.to(gameId).emit('game-state-update', { 
+        gameState: result.session.gameState,
+        action: action
       });
-      return;
+    } catch (error) {
+      console.error(`[Socket.IO] Error processing action:`, error);
+      socket.emit('error', { 
+        message: error instanceof Error ? error.message : 'Unknown error processing action'
+      });
     }
-    
-    // Broadcast the updated game state to all clients in the room
-    io.to(gameId).emit('game-state-update', { 
-      gameState: result.session.gameState,
-      action: action
-    });
   });
   
   // Handle start game request
-  socket.on('start-game', (data) => {
+  socket.on('start-game', async (data) => {
     const { gameId } = data;
     
     if (!gameId) {
@@ -101,23 +113,35 @@ io.on('connection', (socket) => {
       return;
     }
     
-    // Start the game using the game engine
-    const gameEngine = require('./game-engine');
-    const startedSession = gameEngine.startGame(gameId);
-    
-    if (!startedSession) {
-      socket.emit('error', { message: 'Failed to start game' });
-      return;
+    try {
+      console.log(`[Socket.IO] Starting game ${gameId}`);
+      
+      // Start the game using the game engine - now async
+      const gameEngine = require('./game-engine');
+      const startedSession = await gameEngine.startGame(gameId);
+      
+      if (!startedSession) {
+        console.error(`[Socket.IO] Failed to start game ${gameId}`);
+        socket.emit('error', { message: 'Failed to start game' });
+        return;
+      }
+      
+      console.log(`[Socket.IO] Game ${gameId} started successfully`);
+      
+      // Broadcast the game start and updated state
+      io.to(gameId).emit('game-started', {
+        gameState: startedSession.gameState
+      });
+    } catch (error) {
+      console.error(`[Socket.IO] Error starting game:`, error);
+      socket.emit('error', { 
+        message: error instanceof Error ? error.message : 'Unknown error starting game'
+      });
     }
-    
-    // Broadcast the game start and updated state
-    io.to(gameId).emit('game-started', {
-      gameState: startedSession.gameState
-    });
   });
   
   // Handle select cards request
-  socket.on('select-cards', (data) => {
+  socket.on('select-cards', async (data) => {
     const { gameId, playerId, selectedCardIds } = data;
     
     if (!gameId || !playerId || !selectedCardIds) {
@@ -125,35 +149,48 @@ io.on('connection', (socket) => {
       return;
     }
     
-    // Create a select cards action
-    const gameEngine = require('./game-engine');
-    const { v4: uuidv4 } = require('uuid');
-    
-    const selectAction = {
-      id: uuidv4(),
-      type: 'SELECT_CARDS',
-      playerId: playerId,
-      payload: { selectedCardIds },
-      timestamp: Date.now(),
-      gameId: gameId,
-      validated: false
-    };
-    
-    // Process the action
-    const result = gameEngine.processAction(gameId, selectAction);
-    
-    if (!result.session) {
-      socket.emit('error', { 
-        message: result.error || 'Failed to select cards' 
+    try {
+      console.log(`[Socket.IO] Selecting cards for player ${playerId} in game ${gameId}`);
+      
+      // Create a select cards action
+      const gameEngine = require('./game-engine');
+      const { v4: uuidv4 } = require('uuid');
+      
+      const selectAction = {
+        id: uuidv4(),
+        type: 'SELECT_CARDS',
+        playerId: playerId,
+        payload: { selectedCardIds },
+        timestamp: Date.now(),
+        gameId: gameId,
+        validated: false
+      };
+      
+      // Process the action - now async
+      console.log(`[Socket.IO] Processing select cards action`);
+      const result = await gameEngine.processAction(gameId, selectAction);
+      
+      if (!result.session) {
+        console.error(`[Socket.IO] Error selecting cards: ${result.error}`);
+        socket.emit('error', { 
+          message: result.error || 'Failed to select cards' 
+        });
+        return;
+      }
+      
+      console.log(`[Socket.IO] Cards selected successfully, broadcasting update`);
+      
+      // Broadcast the updated game state
+      io.to(gameId).emit('game-state-update', { 
+        gameState: result.session.gameState,
+        action: selectAction
       });
-      return;
+    } catch (error) {
+      console.error(`[Socket.IO] Error selecting cards:`, error);
+      socket.emit('error', { 
+        message: error instanceof Error ? error.message : 'Unknown error selecting cards'
+      });
     }
-    
-    // Broadcast the updated game state
-    io.to(gameId).emit('game-state-update', { 
-      gameState: result.session.gameState,
-      action: selectAction
-    });
   });
   
   // Handle disconnections

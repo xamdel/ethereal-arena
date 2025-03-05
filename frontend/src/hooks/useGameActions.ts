@@ -150,53 +150,94 @@ export function useGameActions() {
   };
 
   // Play a card
-  const playCard = (cardId: string, targetPlayerId?: string) => {
+  const playCard = async (cardId: string, targetPlayerId?: string) => {
     // Set UI state to processing
     dispatchUI({ 
       type: 'SET_PROCESSING', 
       payload: { isProcessing: true } 
     });
 
-    const action: GameAction = {
-      id: generateActionId(),
-      type: ActionType.PLAY_CARD,
-      playerId: 'current', // In a real implementation, this would be the current player's ID
-      payload: {
-        cardId,
-        targetPlayerId
-      },
-      timestamp: Date.now(),
-      gameId: gameState.id,
-      validated: false // Validation happens on the server or game engine
-    };
+    try {
+      console.log(`Playing card ${cardId}${targetPlayerId ? ` targeting ${targetPlayerId}` : ''}`);
+      
+      // Get the current player
+      const currentPlayer = getCurrentPlayer();
+      const playerID = currentPlayer?.id || 'unknown';
+      
+      const action: GameAction = {
+        id: generateActionId(),
+        type: ActionType.PLAY_CARD,
+        playerId: playerID,
+        payload: {
+          cardId,
+          targetPlayerId
+        },
+        timestamp: Date.now(),
+        gameId: gameState.id,
+        validated: false // Validation happens on the server
+      };
 
-    dispatch(action);
-
-    // Reset UI state after processing (in a real implementation, this would happen after server response)
-    setTimeout(() => {
+      // Using dispatch to trigger the updated server communication flow
+      await dispatch(action);
+      
+      console.log('Card played successfully');
+      
+      // Reset UI after the server response is processed
+      dispatchUI({ type: 'RESET_UI' });
+    } catch (error) {
+      console.error('Error playing card:', error);
+      dispatchUI({ 
+        type: 'SET_ERROR', 
+        payload: { message: 'Failed to play card. Please try again.' } 
+      });
+    } finally {
       dispatchUI({ 
         type: 'SET_PROCESSING', 
         payload: { isProcessing: false } 
       });
-      dispatchUI({ 
-        type: 'RESET_UI' 
-      });
-    }, 500);
+    }
   };
 
   // End the current turn
-  const endTurn = () => {
-    const action: GameAction = {
-      id: generateActionId(),
-      type: ActionType.END_TURN,
-      playerId: 'current', // In a real implementation, this would be the current player's ID
-      payload: {},
-      timestamp: Date.now(),
-      gameId: gameState.id,
-      validated: false
-    };
+  const endTurn = async () => {
+    try {
+      dispatchUI({ 
+        type: 'SET_PROCESSING', 
+        payload: { isProcessing: true } 
+      });
+      
+      console.log('Ending turn');
+      
+      // Get the current player
+      const currentPlayer = getCurrentPlayer();
+      const playerID = currentPlayer?.id || 'unknown';
+      
+      const action: GameAction = {
+        id: generateActionId(),
+        type: ActionType.END_TURN,
+        playerId: playerID,
+        payload: {},
+        timestamp: Date.now(),
+        gameId: gameState.id,
+        validated: false
+      };
 
-    dispatch(action);
+      // Using dispatch to trigger the updated server communication flow
+      await dispatch(action);
+      
+      console.log('Turn ended successfully');
+    } catch (error) {
+      console.error('Error ending turn:', error);
+      dispatchUI({ 
+        type: 'SET_ERROR', 
+        payload: { message: 'Failed to end turn. Please try again.' } 
+      });
+    } finally {
+      dispatchUI({ 
+        type: 'SET_PROCESSING', 
+        payload: { isProcessing: false } 
+      });
+    }
   };
 
   // Select a card from hand (UI action)
@@ -248,34 +289,43 @@ export function useGameActions() {
   };
   
   // Select initial cards after draft
-  const selectInitialCards = (selectedCardIds: string[]) => {
+  const selectInitialCards = async (selectedCardIds: string[]) => {
     dispatchUI({ 
       type: 'SET_PROCESSING', 
       payload: { isProcessing: true } 
     });
     
-    const action: GameAction = {
-      id: generateActionId(),
-      type: ActionType.SELECT_CARDS,
-      playerId: gameState.activePlayerId,
-      payload: {
-        selectedCardIds
-      },
-      timestamp: Date.now(),
-      gameId: gameState.id,
-      validated: false
-    };
-    
-    // Dispatch the action
-    dispatch(action);
-    
-    // Reset UI state after processing
-    setTimeout(() => {
+    try {
+      console.log(`Selecting ${selectedCardIds.length} initial cards`);
+      
+      const action: GameAction = {
+        id: generateActionId(),
+        type: ActionType.SELECT_CARDS,
+        playerId: gameState.activePlayerId,
+        payload: {
+          selectedCardIds
+        },
+        timestamp: Date.now(),
+        gameId: gameState.id,
+        validated: false
+      };
+      
+      // Using dispatch to trigger the updated server communication flow
+      await dispatch(action);
+      
+      console.log('Initial cards selected successfully');
+    } catch (error) {
+      console.error('Error selecting initial cards:', error);
+      dispatchUI({ 
+        type: 'SET_ERROR', 
+        payload: { message: 'Failed to select cards. Please try again.' } 
+      });
+    } finally {
       dispatchUI({ 
         type: 'SET_PROCESSING', 
         payload: { isProcessing: false } 
       });
-    }, 500);
+    }
   };
 
   return {
