@@ -404,21 +404,41 @@ export const processNextEffect = (
     effectQueue: remainingEffects
   };
   
+  console.log(`[StateHelpers] Processing effect of type: ${effect.type}`);
+  
   switch (effect.type) {
     case 'damage':
       if (effect.value !== undefined && effect.target) {
+        console.log(`[StateHelpers] Applying ${effect.value} damage to ${effect.target}`);
         newState = applyDamage(newState, effect.target, effect.value);
       }
       break;
       
     case 'block':
       if (effect.value !== undefined && effect.target) {
+        console.log(`[StateHelpers] Applying ${effect.value} block to ${effect.target}`);
         newState = applyBlock(newState, effect.target, effect.value);
       }
       break;
       
+    case 'heal':
+      if (effect.value !== undefined && effect.target) {
+        console.log(`[StateHelpers] Applying ${effect.value} healing to ${effect.target}`);
+        newState = applyHealing(newState, effect.target, effect.value);
+      }
+      break;
+      
+    case 'energy':
+      if (effect.value !== undefined && effect.target) {
+        console.log(`[StateHelpers] Applying ${effect.value} energy to ${effect.target}`);
+        newState = applyEnergyChange(newState, effect.target, effect.value);
+      }
+      break;
+      
     case 'status':
+    case 'status_effect': // For backward compatibility
       if (effect.target && effect.statusName && effect.duration !== undefined) {
+        console.log(`[StateHelpers] Applying status effect ${effect.statusName} to ${effect.target} for ${effect.duration} turns`);
         const statusEffect: StatusEffect = {
           id: uuidv4(),
           name: effect.statusName,
@@ -433,6 +453,7 @@ export const processNextEffect = (
     
     default:
       // Unknown effect type, just remove it from the queue
+      console.log(`[StateHelpers] Unknown effect type: ${effect.type}, skipping`);
       break;
   }
   
@@ -640,5 +661,63 @@ export const validateGameState = (state: GameState): { valid: boolean; errors: s
   return {
     valid: errors.length === 0,
     errors
+  };
+};
+
+/**
+ * Apply healing to a player
+ */
+export const applyHealing = (
+  state: GameState, 
+  targetPlayerId: string, 
+  healAmount: number
+): GameState => {
+  if (!state.players[targetPlayerId]) {
+    return state;
+  }
+  
+  const player = state.players[targetPlayerId];
+  
+  // Calculate new HP, capped at max HP
+  const newHp = Math.min(player.maxHp, player.hp + healAmount);
+  
+  return {
+    ...state,
+    players: {
+      ...state.players,
+      [targetPlayerId]: {
+        ...player,
+        hp: newHp
+      }
+    }
+  };
+};
+
+/**
+ * Apply energy change to a player
+ */
+export const applyEnergyChange = (
+  state: GameState, 
+  targetPlayerId: string, 
+  energyAmount: number
+): GameState => {
+  if (!state.players[targetPlayerId]) {
+    return state;
+  }
+  
+  const player = state.players[targetPlayerId];
+  
+  // Calculate new energy, always at least 0, capped at max energy
+  const newEnergy = Math.min(player.maxEnergy, Math.max(0, player.energy + energyAmount));
+  
+  return {
+    ...state,
+    players: {
+      ...state.players,
+      [targetPlayerId]: {
+        ...player,
+        energy: newEnergy
+      }
+    }
   };
 };

@@ -165,14 +165,23 @@ const handlePlayCard = async (state: GameState, action: GameAction): Promise<Gam
     interpretation.baseEffects.forEach(effect => {
       console.log(`[Game Reducer] Adding base effect to queue: ${effect.type} (${effect.value || 'no value'}) targeting ${effect.target}`);
       
+      // Map LLM effect types to engine effect types
+      let engineEffectType = effect.type;
+      if (effect.type === 'status_effect') {
+        engineEffectType = 'status';
+      }
+      
       stateWithEffects = stateHelpers.addEffectToQueue(stateWithEffects, {
-        type: effect.type,
+        type: engineEffectType,
         value: effect.value,
         source: effect.source || action.playerId,
         target: effect.target,
         card: cardId,
         timing: effect.timing || 'immediate',
-        actionId: action.id
+        actionId: action.id,
+        statusName: effect.statusName,
+        statusDescription: effect.statusDescription,
+        duration: effect.duration
       });
     });
     
@@ -180,8 +189,14 @@ const handlePlayCard = async (state: GameState, action: GameAction): Promise<Gam
     interpretation.wildcardEffects.forEach(effect => {
       console.log(`[Game Reducer] Adding wildcard effect to queue: ${effect.type} (${effect.value || 'no value'}) targeting ${effect.target}`);
       
+      // Map LLM effect types to engine effect types
+      let engineEffectType = effect.type;
+      if (effect.type === 'status_effect') {
+        engineEffectType = 'status';
+      }
+      
       stateWithEffects = stateHelpers.addEffectToQueue(stateWithEffects, {
-        type: effect.type,
+        type: engineEffectType,
         value: effect.value,
         source: effect.source || action.playerId,
         target: effect.target,
