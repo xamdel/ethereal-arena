@@ -4,6 +4,7 @@ import cors from 'cors';
 import { Server } from 'socket.io';
 import dotenv from 'dotenv';
 import apiRoutes from './routes/api';
+import llmApiRoutes from './routes/llm-api';
 
 // Load environment variables
 dotenv.config();
@@ -30,6 +31,7 @@ app.use(express.json());
 
 // Routes
 app.use('/api', apiRoutes);
+app.use('/api/llm', llmApiRoutes);
 
 // Root route
 app.get('/', (req, res) => {
