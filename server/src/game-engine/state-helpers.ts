@@ -143,6 +143,9 @@ export const applyDamage = (
   
   const player = state.players[targetPlayerId];
   
+  console.log(`[applyDamage] Applying ${damage} damage to player ${targetPlayerId}`);
+  console.log(`[applyDamage] Current player state: HP=${player.hp}/${player.maxHp}, Block=${player.block}`);
+  
   // Apply block first
   let remainingDamage = damage;
   let newBlock = player.block;
@@ -151,14 +154,17 @@ export const applyDamage = (
     if (player.block >= damage) {
       newBlock -= damage;
       remainingDamage = 0;
+      console.log(`[applyDamage] Block absorbed all damage. New block: ${newBlock}`);
     } else {
       remainingDamage -= player.block;
       newBlock = 0;
+      console.log(`[applyDamage] Block partially absorbed damage. Remaining damage: ${remainingDamage}`);
     }
   }
   
   // Apply remaining damage to HP
   const newHp = Math.max(0, player.hp - remainingDamage);
+  console.log(`[applyDamage] Final damage result: New HP=${newHp}, New Block=${newBlock}`);
   
   // Check for game over
   let winner = state.winner;
@@ -167,6 +173,7 @@ export const applyDamage = (
     const otherPlayerId = Object.keys(state.players).find(id => id !== targetPlayerId);
     if (otherPlayerId) {
       winner = otherPlayerId;
+      console.log(`[applyDamage] Player ${targetPlayerId} defeated! Winner: ${winner}`);
     }
   }
   
@@ -193,10 +200,13 @@ export const applyBlock = (
   blockAmount: number
 ): GameState => {
   if (!state.players[targetPlayerId]) {
+    console.log(`[applyBlock] Player ${targetPlayerId} not found`);
     return state;
   }
   
   const player = state.players[targetPlayerId];
+  console.log(`[applyBlock] Applying ${blockAmount} block to player ${targetPlayerId}`);
+  console.log(`[applyBlock] Current block: ${player.block}, New block will be: ${player.block + blockAmount}`);
   
   return {
     ...state,
@@ -219,10 +229,13 @@ export const applyStatusEffect = (
   statusEffect: StatusEffect
 ): GameState => {
   if (!state.players[targetPlayerId]) {
+    console.log(`[applyStatusEffect] Player ${targetPlayerId} not found`);
     return state;
   }
   
   const player = state.players[targetPlayerId];
+  console.log(`[applyStatusEffect] Applying status effect to player ${targetPlayerId}: ${statusEffect.name} (${statusEffect.description}) for ${statusEffect.duration} turns`);
+  console.log(`[applyStatusEffect] Current status effects: ${player.statusEffects.map(e => e.name).join(', ') || 'None'}`);
   
   // Check if the player already has this status effect
   const existingEffect = player.statusEffects.find(effect => effect.name === statusEffect.name);
@@ -231,6 +244,7 @@ export const applyStatusEffect = (
   
   if (existingEffect) {
     // Update the existing effect (e.g., refresh duration)
+    console.log(`[applyStatusEffect] Existing effect found. Updating duration from ${existingEffect.duration} to ${Math.max(existingEffect.duration, statusEffect.duration)}`);
     newStatusEffects = player.statusEffects.map(effect => 
       effect.name === statusEffect.name 
         ? { ...effect, duration: Math.max(effect.duration, statusEffect.duration) }
@@ -238,8 +252,11 @@ export const applyStatusEffect = (
     );
   } else {
     // Add the new effect
+    console.log(`[applyStatusEffect] Adding new status effect to player`);
     newStatusEffects = [...player.statusEffects, statusEffect];
   }
+  
+  console.log(`[applyStatusEffect] New status effects: ${newStatusEffects.map(e => e.name).join(', ')}`);
   
   return {
     ...state,

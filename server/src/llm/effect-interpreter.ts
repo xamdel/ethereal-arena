@@ -121,6 +121,9 @@ All responses must be in valid JSON format.`;
     const { card, playerId, targetId, gameState } = context;
     const player = gameState.players[playerId];
     const opponent = Object.values(gameState.players).find(p => p.id !== playerId);
+    
+    // Get the actual player IDs for explicit targeting
+    const opponentId = opponent?.id || 'no-opponent';
 
     let prompt = `Interpret the effects of the following card in the current game context:
 
@@ -157,7 +160,7 @@ OPPONENT:
 
     // Add target information if available
     if (targetId) {
-      prompt += `\n\nSPECIFIC TARGET: ${targetId === playerId ? 'Player (self)' : 'Opponent'}`;
+      prompt += `\n\nSPECIFIC TARGET: ${targetId === playerId ? 'self' : 'opponent'}`;
     }
 
     prompt += `\n\nYour task:
@@ -171,7 +174,7 @@ Rules for interpretation:
 - Status effects typically last 2-3 turns
 - Valid effect types: damage, block, heal, draw, energy, status_effect
 - Valid timing values: immediate, after-damage, turn-start, turn-end
-- Always include the player IDs for source and target
+- For targets, always use either "self" (for the player using the card) or "opponent"
 
 Respond with a JSON object containing the interpreted effects. Example format:
 {
@@ -179,8 +182,8 @@ Respond with a JSON object containing the interpreted effects. Example format:
     {
       "type": "damage",
       "value": 8,
-      "target": "${opponent?.id || 'opponent'}",
-      "source": "${playerId}",
+      "target": "opponent",
+      "source": "self",
       "description": "Deals 8 damage to the opponent",
       "timing": "immediate"
     }
@@ -188,8 +191,8 @@ Respond with a JSON object containing the interpreted effects. Example format:
   "wildcard_effect": [
     {
       "type": "status_effect",
-      "target": "${opponent?.id || 'opponent'}",
-      "source": "${playerId}",
+      "target": "opponent",
+      "source": "self",
       "description": "Applies Burning status to the opponent",
       "timing": "immediate",
       "statusName": "Burning",

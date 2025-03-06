@@ -171,11 +171,33 @@ const handlePlayCard = async (state: GameState, action: GameAction): Promise<Gam
         engineEffectType = 'status';
       }
       
+      // Make sure the target ID exists in the game state
+      let targetId = effect.target;
+      
+      // Special handling for simple target values
+      if (targetId === 'self' || targetId === 'SELF' || targetId === 'PLAYER') {
+        targetId = action.playerId;
+        console.log(`[Game Reducer] Mapped '${effect.target}' target to actual player ID: ${targetId}`);
+      } else if (targetId === 'opponent' || targetId === 'OPPONENT') {
+        // Find opponent ID
+        const opponentId = Object.keys(newState.players).find(id => id !== action.playerId);
+        if (opponentId) {
+          targetId = opponentId;
+          console.log(`[Game Reducer] Mapped '${effect.target}' target to actual opponent ID: ${targetId}`);
+        }
+      }
+      
+      // Verify the target exists
+      if (!newState.players[targetId]) {
+        console.error(`[Game Reducer] Target player ID ${targetId} not found in game state. Available players: ${Object.keys(newState.players).join(', ')}`);
+        return; // Skip this effect
+      }
+      
       stateWithEffects = stateHelpers.addEffectToQueue(stateWithEffects, {
         type: engineEffectType,
         value: effect.value,
         source: effect.source || action.playerId,
-        target: effect.target,
+        target: targetId,
         card: cardId,
         timing: effect.timing || 'immediate',
         actionId: action.id,
@@ -195,11 +217,33 @@ const handlePlayCard = async (state: GameState, action: GameAction): Promise<Gam
         engineEffectType = 'status';
       }
       
+      // Make sure the target ID exists in the game state
+      let targetId = effect.target;
+      
+      // Special handling for simple target values
+      if (targetId === 'self' || targetId === 'SELF' || targetId === 'PLAYER') {
+        targetId = action.playerId;
+        console.log(`[Game Reducer] Mapped '${effect.target}' target to actual player ID: ${targetId}`);
+      } else if (targetId === 'opponent' || targetId === 'OPPONENT') {
+        // Find opponent ID
+        const opponentId = Object.keys(newState.players).find(id => id !== action.playerId);
+        if (opponentId) {
+          targetId = opponentId;
+          console.log(`[Game Reducer] Mapped '${effect.target}' target to actual opponent ID: ${targetId}`);
+        }
+      }
+      
+      // Verify the target exists
+      if (!newState.players[targetId]) {
+        console.error(`[Game Reducer] Target player ID ${targetId} not found in game state. Available players: ${Object.keys(newState.players).join(', ')}`);
+        return; // Skip this effect
+      }
+      
       stateWithEffects = stateHelpers.addEffectToQueue(stateWithEffects, {
         type: engineEffectType,
         value: effect.value,
         source: effect.source || action.playerId,
-        target: effect.target,
+        target: targetId,
         card: cardId,
         timing: effect.timing || 'immediate',
         actionId: action.id,
@@ -218,10 +262,25 @@ const handlePlayCard = async (state: GameState, action: GameAction): Promise<Gam
     // Process immediate effects
     stateWithEffects = stateHelpers.processAllEffects(stateWithEffects);
     
-    return {
+    // Debug the final state before returning
+    const finalState = {
       ...stateWithEffects,
       phase: 'action'
     };
+    
+    // Log player stats to verify effects were applied
+    Object.keys(finalState.players).forEach(playerId => {
+      const player = finalState.players[playerId];
+      console.log(`[Game Reducer] Final state for player ${playerId}:`, {
+        hp: player.hp,
+        maxHp: player.maxHp,
+        block: player.block,
+        energy: player.energy,
+        statusEffects: player.statusEffects,
+      });
+    });
+    
+    return finalState;
   } catch (error) {
     console.error(`[Game Reducer] Error interpreting card effects:`, error);
     console.log(`[Game Reducer] Falling back to basic effect processing`);
@@ -255,10 +314,25 @@ const handlePlayCard = async (state: GameState, action: GameAction): Promise<Gam
     // Process immediate effects
     stateWithEffects = stateHelpers.processAllEffects(stateWithEffects);
     
-    return {
+    // Debug the final state before returning
+    const finalState = {
       ...stateWithEffects,
       phase: 'action'
     };
+    
+    // Log player stats to verify effects were applied
+    Object.keys(finalState.players).forEach(playerId => {
+      const player = finalState.players[playerId];
+      console.log(`[Game Reducer] Fallback: Final state for player ${playerId}:`, {
+        hp: player.hp,
+        maxHp: player.maxHp,
+        block: player.block,
+        energy: player.energy,
+        statusEffects: player.statusEffects,
+      });
+    });
+    
+    return finalState;
   }
 };
 

@@ -331,6 +331,17 @@ export function GameProvider({ children }: { children: ReactNode }) {
           
           console.log(`Server processed action, updated state received:`, result);
           
+          if (!result.gameState) {
+            console.error("Server response missing gameState:", result);
+            dispatchUI({ 
+              type: 'SET_ERROR', 
+              payload: { message: 'Invalid response from server. Game state not updated.' } 
+            });
+            return;
+          }
+          
+          console.log("Updating game state with:", result.gameState);
+          
           // Update the local state with the server response
           dispatch({
             ...action,

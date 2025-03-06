@@ -74,6 +74,19 @@ router.post('/games/:gameId/actions', async (req, res) => {
     
     console.log(`Action processed successfully`);
     
+    // Debug the game state before returning
+    console.log(`[API] Player stats in response:`, Object.keys(result.session.gameState.players).map(playerId => {
+      const player = result.session.gameState.players[playerId];
+      return {
+        id: playerId,
+        hp: player.hp,
+        maxHp: player.maxHp,
+        block: player.block,
+        energy: player.energy,
+        statusEffects: player.statusEffects,
+      };
+    }));
+    
     // Return the updated game state
     res.json({
       actionId: action.id,

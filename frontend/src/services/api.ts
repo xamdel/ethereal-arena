@@ -66,7 +66,7 @@ export const getGameState = async (gameId: string): Promise<{ gameState: GameSta
 export const submitAction = async (
   gameId: string,
   action: GameAction
-): Promise<{ actionId: string; status: string; timestamp: number }> => {
+): Promise<{ actionId: string; status: string; timestamp: number; gameState: GameState }> => {
   const response = await fetch(`${API_BASE_URL}/games/${gameId}/actions`, {
     method: 'POST',
     headers: {
@@ -80,7 +80,21 @@ export const submitAction = async (
     throw new Error(error.message || 'Failed to submit action');
   }
 
-  return response.json();
+  try {
+    const result = await response.json();
+    console.log("API response:", result);
+    
+    // Validate that the response contains gameState
+    if (!result.gameState) {
+      console.error("Server response missing gameState property:", result);
+    }
+    
+    return result;
+  } catch (error) {
+    console.error("Error parsing API response:", error);
+    console.log("Raw response text:", await response.text());
+    throw new Error("Failed to parse server response");
+  }
 };
 
 /**
