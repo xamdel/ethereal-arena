@@ -1,7 +1,6 @@
 import { Card } from '@/types';
 import { LLMClient, llmClient } from './api-client';
 
-// Game state interface for effect interpretation
 interface GameState {
   players: {
     [playerId: string]: {
@@ -15,6 +14,7 @@ interface GameState {
         name: string;
         description: string;
         duration: number;
+        timing?: 'turn-start' | 'turn-end' | 'on-attack' | 'on-damaged';
       }[];
     };
   };
@@ -23,7 +23,6 @@ interface GameState {
   phase: string;
 }
 
-// Card play context
 interface CardPlayContext {
   card: Card;
   playerId: string;
@@ -31,24 +30,24 @@ interface CardPlayContext {
   gameState: GameState;
 }
 
-// Output from effect interpretation
-export interface InterpretedEffect {
-  type: string;
-  value?: number;
-  target: string;
-  source: string;
-  description: string;
-  timing: 'immediate' | 'after-damage' | 'turn-start' | 'turn-end';
+export type StateChangeAction = {
+  action: 'REMOVE_HP' | 'ADD_HP' | 'ADD_BLOCK' | 'REMOVE_BLOCK' | 
+          'ADD_ENERGY' | 'REMOVE_ENERGY' | 'ADD_STATUS_EFFECT' | 
+          'REMOVE_STATUS_EFFECT' | 'MODIFY_STATUS_EFFECT' |
+          'DRAW' | 'DISCARD';
+  target: 'self' | 'opponent';
+  value: number;
+  statusId?: string;
   statusName?: string;
   statusDescription?: string;
   duration?: number;
-}
+  timing?: 'immediate' | 'turn-start' | 'turn-end' | 'on-attack' | 'on-damaged';
+  reasoning: string;
+};
 
-// Response format from LLM
-interface EffectInterpretationResponse {
-  base_effects: InterpretedEffect[];
-  wildcard_effect: InterpretedEffect[];
+interface CardInterpretationResponse {
   narrative: string;
+  stateChanges: StateChangeAction[];
 }
 
 export class EffectInterpreter {
@@ -58,71 +57,42 @@ export class EffectInterpreter {
     this.llmClient = client || llmClient;
   }
 
-  /**
-   * Interpret a card's effects in the current game context
-   */
   public async interpretCardEffects(context: CardPlayContext): Promise<{
-    baseEffects: InterpretedEffect[];
-    wildcardEffects: InterpretedEffect[];
+    stateChanges: StateChangeAction[];
     narrative: string;
   }> {
-    console.log(`[EffectInterpreter] Starting interpretation for card: ${context.card.name} (${context.card.id})`);
-    console.log(`[EffectInterpreter] Player: ${context.playerId}, Target: ${context.targetId || 'not specified'}`);
-    console.log(`[EffectInterpreter] Card base effects: ${JSON.stringify(context.card.base_effects)}`);
-    console.log(`[EffectInterpreter] Card wildcard effect: ${context.card.wildcard_effect}`);
-    
-    // Create the prompt for effect interpretation
     const prompt = this.createEffectInterpretationPrompt(context);
-    console.log(`[EffectInterpreter] Generated prompt: ${prompt}`);
-
-    console.log(`[EffectInterpreter] Calling LLM with temperature 0.3...`);
-    // Call the LLM with the prompt
     const response = await this.llmClient.complete(prompt, {
-      temperature: 0.3, // Lower temperature for more consistent interpretations
+      temperature: 0.3,
       systemPrompt: this.getEffectInterpretationSystemPrompt(),
     });
-    console.log(`[EffectInterpreter] Received LLM response with ${response.content.length} characters`);
-    console.log(`[EffectInterpreter] Model used: ${response.model}, Tokens: ${response.totalTokens}`);
 
-    // Parse the response to extract interpreted effects
-    console.log(`[EffectInterpreter] Parsing response to extract effects...`);
     const interpretation = this.parseEffectInterpretation(response.content);
-    console.log(`[EffectInterpreter] Parsed ${interpretation.base_effects.length} base effects and ${interpretation.wildcard_effect.length} wildcard effects`);
-    console.log(`[EffectInterpreter] Base effects: ${JSON.stringify(interpretation.base_effects)}`);
-    console.log(`[EffectInterpreter] Wildcard effects: ${JSON.stringify(interpretation.wildcard_effect)}`);
-    console.log(`[EffectInterpreter] Narrative: "${interpretation.narrative}"`);
 
     return {
-      baseEffects: interpretation.base_effects,
-      wildcardEffects: interpretation.wildcard_effect,
+      stateChanges: interpretation.stateChanges,
       narrative: interpretation.narrative
     };
   }
 
-  /**
-   * Create the system prompt for effect interpretation
-   */
   private getEffectInterpretationSystemPrompt(): string {
     return `You are a card game interpreter that translates card effects into specific game actions. 
     
 Your role is to:
-1. Translate base effects into specific game actions
-2. Interpret wildcard effects within the current game context
+1. Interpret card effects within the current game context
+2. Translate effects into specific state change actions
 3. Ensure all interpretations are balanced and fair
 4. Provide a narrative description of what happens when the card is played
 
+Consider all relevant status effects when determining outcomes.
 All responses must be in valid JSON format.`;
   }
 
-  /**
-   * Create the user prompt for effect interpretation
-   */
   private createEffectInterpretationPrompt(context: CardPlayContext): string {
     const { card, playerId, targetId, gameState } = context;
     const player = gameState.players[playerId];
     const opponent = Object.values(gameState.players).find(p => p.id !== playerId);
     
-    // Get the actual player IDs for explicit targeting
     const opponentId = opponent?.id || 'no-opponent';
 
     let prompt = `Interpret the effects of the following card in the current game context:
@@ -130,10 +100,6 @@ All responses must be in valid JSON format.`;
 CARD DETAILS:
 - Name: ${card.name}
 - Cost: ${card.cost}
-- Base effects: ${card.base_effects.map(effect => 
-      `${effect.effect_type} ${effect.value} (target: ${effect.target})`
-    ).join(', ')}
-- Wildcard effect: ${card.wildcard_effect}
 - Description: ${card.description}
 
 CURRENT GAME STATE:
@@ -147,7 +113,7 @@ PLAYER (card user):
 - Energy: ${player.energy}
 - Status effects: ${player.statusEffects.length > 0 ? 
       player.statusEffects.map(effect => 
-        `${effect.name} (${effect.description}, ${effect.duration} turns)`
+        `${effect.name} (ID: ${effect.id}, ${effect.description}, ${effect.duration} turns${effect.timing ? `, triggers: ${effect.timing}` : ''})`
       ).join(', ') : 'None'}
 
 OPPONENT:
@@ -155,144 +121,216 @@ OPPONENT:
 - Block: ${opponent?.block}
 - Status effects: ${opponent?.statusEffects && opponent.statusEffects.length > 0 ? 
       opponent.statusEffects.map(effect => 
-        `${effect.name} (${effect.description}, ${effect.duration} turns)`
+        `${effect.name} (ID: ${effect.id}, ${effect.description}, ${effect.duration} turns${effect.timing ? `, triggers: ${effect.timing}` : ''})`
       ).join(', ') : 'None'}`;
 
-    // Add target information if available
     if (targetId) {
       prompt += `\n\nSPECIFIC TARGET: ${targetId === playerId ? 'self' : 'opponent'}`;
     }
 
-    prompt += `\n\nYour task:
-1. Interpret each base effect literally, converting it into a specific game action
-2. Interpret the wildcard effect creatively but fairly within the current game context
-3. Provide a narrative description of what happens when the card is played
+    prompt += `\n\nPOSSIBLE STATE CHANGE ACTIONS (with schema examples):
+
+// Health and Block changes
+{
+  "action": "REMOVE_HP",   // or "ADD_HP"
+  "target": "opponent",    // or "self"
+  "value": 7,              // amount of HP to remove/add
+  "reasoning": "5 base damage + 2 from Vulnerable status effect"
+}
+
+{
+  "action": "ADD_BLOCK",   // or "REMOVE_BLOCK"
+  "target": "self",        // or "opponent"
+  "value": 5,              // amount of block to add/remove
+  "reasoning": "Defensive stance provides 5 block"
+}
+
+// Energy management
+{
+  "action": "ADD_ENERGY",  // or "REMOVE_ENERGY"
+  "target": "self",        // usually "self" for energy
+  "value": 2,              // amount of energy to add/remove
+  "reasoning": "Card cost (reduced from 3 due to Focus status)"
+}
+
+// Card manipulation
+{
+  "action": "DRAW",        // or "DISCARD"
+  "target": "self",        // usually "self" for card actions
+  "value": 2,              // number of cards to draw/discard
+  "reasoning": "Card effect allows drawing 2 additional cards"
+}
+
+// Status effect management
+{
+  "action": "ADD_STATUS_EFFECT",
+  "target": "opponent",    // or "self"
+  "statusName": "Burning", // name of the status
+  "statusDescription": "Target takes 3 damage at the start of each turn",
+  "duration": 2,           // number of turns the effect lasts
+  "timing": "turn-start",  // when the effect triggers
+  "value": 3,              // value associated with the effect (e.g. damage amount)
+  "reasoning": "Flames ignite the target, causing ongoing damage"
+}
+
+{
+  "action": "REMOVE_STATUS_EFFECT",
+  "target": "self",        // or "opponent"
+  "statusName": "Poison",  // name of the status to remove
+  "reasoning": "Antidote removes all poison"
+}
+
+{
+  "action": "MODIFY_STATUS_EFFECT",
+  "target": "opponent",    // or "self" 
+  "statusName": "Burning", // name of the status to modify
+  "value": 5,              // new value
+  "duration": 3,           // new duration (optional)
+  "reasoning": "Oil increases burning damage and extends duration"
+}
+
+Your task:
+1. Interpret the card effect in the context of the current game state
+2. Consider how any status effects might modify the outcome
+3. Translate the card effect into specific state change actions
+4. Provide a narrative description of what happens
 
 Rules for interpretation:
-- Base effects should be interpreted directly (e.g., "damage 10" deals 10 damage)
-- Wildcard effects should be reasonably powerful but balanced
-- Status effects typically last 2-3 turns
-- Valid effect types: damage, block, heal, draw, energy, status_effect
-- Valid timing values: immediate, after-damage, turn-start, turn-end
+- Interpret card effects fairly and consistently
+- Provide a "reasoning" field to explain each state change
+- For status effects, specify duration (typically 2-3 turns)
+- For status effect timing, use: immediate, turn-start, turn-end, on-attack, on-damaged
 - For targets, always use either "self" (for the player using the card) or "opponent"
 
-Respond with a JSON object containing the interpreted effects. Example format:
+Respond with a JSON object containing a narrative and state changes. Here are complete examples:
+
+EXAMPLE 1 - Basic attack vs block:
 {
-  "base_effects": [
+  "narrative": "Your sword slams into the opponent's shield, shattering their defenses before cutting into their armor.",
+  "stateChanges": [
     {
-      "type": "damage",
-      "value": 8,
+      "action": "REMOVE_ENERGY",
+      "target": "self",
+      "value": 2,
+      "reasoning": "Card cost"
+    },
+    {
+      "action": "REMOVE_BLOCK",
       "target": "opponent",
-      "source": "self",
-      "description": "Deals 8 damage to the opponent",
-      "timing": "immediate"
+      "value": 5,
+      "reasoning": "Sword attack removes all remaining block"
+    },
+    {
+      "action": "REMOVE_HP",
+      "target": "opponent",
+      "value": 3,
+      "reasoning": "Attack does 8 total damage, 5 was absorbed by block, 3 damages HP"
     }
-  ],
-  "wildcard_effect": [
+  ]
+}
+
+EXAMPLE 2 - Status effect interaction:
+{
+  "narrative": "A bolt of lightning arcs from your fingertips, intensified by the conductive water soaking your opponent.",
+  "stateChanges": [
     {
-      "type": "status_effect",
+      "action": "REMOVE_ENERGY",
+      "target": "self",
+      "value": 1,
+      "reasoning": "Card cost reduced from 2 to 1 by Focused status"
+    },
+    {
+      "action": "REMOVE_HP",
       "target": "opponent",
-      "source": "self",
-      "description": "Applies Burning status to the opponent",
+      "value": 12,
+      "reasoning": "8 base damage + 50% bonus (4) from Soaked status effect"
+    },
+    {
+      "action": "REMOVE_STATUS_EFFECT",
+      "target": "opponent",
+      "statusName": "Soaked",
+      "reasoning": "Lightning evaporates the water, removing Soaked status"
+    },
+    {
+      "action": "ADD_STATUS_EFFECT",
+      "target": "opponent",
+      "statusName": "Stunned",
+      "statusDescription": "Skip next action due to electrical shock",
+      "duration": 1,
       "timing": "immediate",
-      "statusName": "Burning",
-      "statusDescription": "Takes 2 damage at the start of each turn",
-      "duration": 2
+      "reasoning": "Lightning temporarily paralyzes the target"
     }
-  ],
-  "narrative": "A burst of arcane energy erupts from your hands, striking your opponent with tremendous force. The residual magic ignites their armor, causing it to smolder."
+  ]
 }`;
 
     return prompt;
   }
 
-  /**
-   * Parse the LLM response to extract interpreted effects
-   */
-  private parseEffectInterpretation(content: string): EffectInterpretationResponse {
+  private parseEffectInterpretation(content: string): CardInterpretationResponse {
     try {
-      console.log(`[EffectInterpreter] Starting to parse LLM response...`);
-      
-      // Extract JSON from the response (in case there's extra text)
       const jsonMatch = content.match(/\{[\s\S]*\}/);
       if (!jsonMatch) {
-        console.error(`[EffectInterpreter] No valid JSON found in the response`);
-        console.log(`[EffectInterpreter] Raw response content: ${content}`);
         throw new Error('No valid JSON found in the response');
       }
 
       const jsonContent = jsonMatch[0];
-      console.log(`[EffectInterpreter] Extracted JSON content: ${jsonContent}`);
-      
-      let parsed;
-      try {
-        parsed = JSON.parse(jsonContent);
-        console.log(`[EffectInterpreter] Successfully parsed JSON`);
-      } catch (parseError) {
-        console.error(`[EffectInterpreter] JSON.parse error: ${(parseError as Error).message}`);
-        console.log(`[EffectInterpreter] Invalid JSON content: ${jsonContent}`);
-        throw parseError;
-      }
-
-      // Validate the response format with detailed logging
-      console.log(`[EffectInterpreter] Validating response format...`);
-      console.log(`[EffectInterpreter] Response keys: ${Object.keys(parsed).join(', ')}`);
-      
-      if (!parsed.base_effects) {
-        console.error(`[EffectInterpreter] base_effects key missing in response`);
-        throw new Error('Invalid response format: base_effects array not found');
-      }
-      
-      if (!Array.isArray(parsed.base_effects)) {
-        console.error(`[EffectInterpreter] base_effects is not an array, type: ${typeof parsed.base_effects}`);
-        throw new Error('Invalid response format: base_effects is not an array');
-      }
-      
-      console.log(`[EffectInterpreter] base_effects array validation passed`);
-
-      if (!parsed.wildcard_effect) {
-        console.error(`[EffectInterpreter] wildcard_effect key missing in response`);
-        throw new Error('Invalid response format: wildcard_effect array not found');
-      }
-      
-      if (!Array.isArray(parsed.wildcard_effect)) {
-        console.error(`[EffectInterpreter] wildcard_effect is not an array, type: ${typeof parsed.wildcard_effect}`);
-        throw new Error('Invalid response format: wildcard_effect is not an array');
-      }
-      
-      console.log(`[EffectInterpreter] wildcard_effect array validation passed`);
+      const parsed = JSON.parse(jsonContent);
 
       if (!parsed.narrative) {
-        console.error(`[EffectInterpreter] narrative key missing in response`);
         throw new Error('Invalid response format: narrative string not found');
       }
       
       if (typeof parsed.narrative !== 'string') {
-        console.error(`[EffectInterpreter] narrative is not a string, type: ${typeof parsed.narrative}`);
         throw new Error('Invalid response format: narrative is not a string');
       }
+
+      if (!parsed.stateChanges) {
+        throw new Error('Invalid response format: stateChanges array not found');
+      }
       
-      console.log(`[EffectInterpreter] narrative validation passed`);
-      console.log(`[EffectInterpreter] Response format validation complete`);
+      if (!Array.isArray(parsed.stateChanges)) {
+        throw new Error('Invalid response format: stateChanges is not an array');
+      }
+
+      // Validate each state change
+      parsed.stateChanges.forEach((change: any, index: number) => {
+        if (!change.action) {
+          throw new Error(`State change at index ${index} missing required 'action' field`);
+        }
+        if (!change.target) {
+          throw new Error(`State change at index ${index} missing required 'target' field`);
+        }
+        if (change.value === undefined && 
+            !['REMOVE_STATUS_EFFECT', 'MODIFY_STATUS_EFFECT'].includes(change.action)) {
+          throw new Error(`State change at index ${index} missing required 'value' field`);
+        }
+        if (['REMOVE_STATUS_EFFECT', 'MODIFY_STATUS_EFFECT'].includes(change.action) && !change.statusName) {
+          throw new Error(`Status effect change at index ${index} missing required 'statusName' field`);
+        }
+        if (change.action === 'ADD_STATUS_EFFECT' && !change.statusName) {
+          throw new Error(`ADD_STATUS_EFFECT at index ${index} missing required 'statusName' field`);
+        }
+        if (change.action === 'ADD_STATUS_EFFECT' && !change.statusDescription) {
+          throw new Error(`ADD_STATUS_EFFECT at index ${index} missing required 'statusDescription' field`);
+        }
+        if (change.action === 'ADD_STATUS_EFFECT' && !change.duration) {
+          throw new Error(`ADD_STATUS_EFFECT at index ${index} missing required 'duration' field`);
+        }
+        if (!change.reasoning) {
+          throw new Error(`State change at index ${index} missing required 'reasoning' field`);
+        }
+      });
 
       return {
-        base_effects: parsed.base_effects,
-        wildcard_effect: parsed.wildcard_effect,
+        stateChanges: parsed.stateChanges,
         narrative: parsed.narrative
       };
     } catch (error) {
-      console.error(`[EffectInterpreter] Failed to parse effect interpretation: ${(error as Error).message}`);
-      console.log(`[EffectInterpreter] Raw response length: ${content.length} characters`);
-      console.log(`[EffectInterpreter] First 200 chars of raw response: ${content.substring(0, 200)}`);
-      if (content.length > 400) {
-        console.log(`[EffectInterpreter] Last 200 chars of raw response: ${content.substring(content.length - 200)}`);
-      }
       throw new Error(`Failed to parse effect interpretation: ${(error as Error).message}`);
     }
   }
 }
 
-// Export a lazy-loaded singleton instance for convenience
 export const effectInterpreter = (() => {
   let instance: EffectInterpreter | null = null;
   return () => {
@@ -301,4 +339,4 @@ export const effectInterpreter = (() => {
     }
     return instance;
   };
-})()();
+})();
