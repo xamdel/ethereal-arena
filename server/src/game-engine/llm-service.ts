@@ -1,5 +1,5 @@
 import { Card } from '@/types';
-import { generateCards, interpretCardEffects, InterpretedEffect } from '../llm';
+import { generateCards, interpretCardEffects, StateChangeAction } from '../llm';
 
 /**
  * Interface for the game state expected by the LLM service

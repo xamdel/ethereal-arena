@@ -32,7 +32,7 @@ router.post('/games/:gameId/cards', async (req, res) => {
     const llmGameState = {
       players: gameSession.gameState.players,
       activePlayerId: gameSession.gameState.activePlayerId,
-      turn: gameSession.gameState.turn,
+      turn: gameSession.gameState.turnNumber, // Use turnNumber instead of turn
       phase: gameSession.gameState.phase
     };
     
@@ -97,7 +97,7 @@ router.post('/games/:gameId/interpret', async (req, res) => {
     const llmGameState = {
       players: gameSession.gameState.players,
       activePlayerId: gameSession.gameState.activePlayerId,
-      turn: gameSession.gameState.turn,
+      turn: gameSession.gameState.turnNumber, // Use turnNumber instead of turn
       phase: gameSession.gameState.phase
     };
     
@@ -149,7 +149,7 @@ router.post('/games/:gameId/narrative', async (req, res) => {
     const llmGameState = {
       players: gameSession.gameState.players,
       activePlayerId: gameSession.gameState.activePlayerId,
-      turn: gameSession.gameState.turn,
+      turn: gameSession.gameState.turnNumber, // Use turnNumber instead of turn
       phase: gameSession.gameState.phase
     };
     

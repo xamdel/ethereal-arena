@@ -59,6 +59,7 @@ export interface GameState {
   lastUpdateTime: number;
   winner: string | null;
   isMultiplayer: boolean;
+  lastNarrative?: string; // Narrative description of the last action
 }
 
 /**

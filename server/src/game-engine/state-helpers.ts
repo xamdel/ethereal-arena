@@ -474,12 +474,11 @@ export const processNextEffect = (
     case 'draw':
       if (effect.value !== undefined && effect.target) {
         console.log(`[StateHelpers] Drawing ${effect.value} cards for ${effect.target}`);
-        // Draw multiple cards
-        let stateAfterDraw = newState;
-        for (let i = 0; i < effect.value; i++) {
-          stateAfterDraw = drawCard(stateAfterDraw, effect.target);
-        }
-        newState = stateAfterDraw;
+        // Note: In our game, drawing cards means generating new ones from the LLM
+        // This operation needs to be handled asynchronously outside this function
+        // For now, just log that cards need to be generated
+        console.log(`[StateHelpers] Need to generate ${effect.value} new cards for player ${effect.target}`);
+        // The actual card generation and addition to hand will be handled elsewhere
       }
       break;
       
