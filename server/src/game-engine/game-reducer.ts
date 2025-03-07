@@ -7,6 +7,16 @@ import { v4 as uuidv4 } from 'uuid';
 import { GameState, GameAction, ActionType, Card } from '../types';
 import * as stateHelpers from './state-helpers';
 
+// Type-safe phase values
+type GamePhase = GameState['phase'];
+const PHASES: { [key: string]: GamePhase } = {
+  INIT: 'init',
+  TURN_START: 'turnStart',
+  DRAW: 'draw',
+  ACTION: 'action',
+  TURN_END: 'turnEnd'
+};
+
 /**
  * Process a game action and return the updated state
  * Now supports async operations for LLM integration
@@ -91,7 +101,7 @@ const handleGameInit = (state: GameState, action: GameAction): GameState => {
   
   return {
     ...newState,
-    phase: 'init'
+    phase: PHASES.INIT
   };
 };
 
@@ -120,14 +130,14 @@ const handlePlayCard = async (state: GameState, action: GameAction): Promise<Gam
     return state;
   }
   
-  console.log(`[Game Reducer] Playing card: ${playedCard.name} (${playedCard.id})`);
+  console.log(`[Game Reducer] Playing card: ${playedCard.name} (${playedCard.id})`, playedCard);
   console.log(`[Game Reducer] Base effects: ${JSON.stringify(playedCard.base_effects)}`);
   console.log(`[Game Reducer] Wildcard effect: ${playedCard.wildcard_effect}`);
 
   try {
     // Use the LLM service to interpret the card effects
     const { llmService } = await import('./llm-service');
-    
+
     // Convert game state to format for LLM
     const llmGameState = {
       players: Object.entries(newState.players).reduce((acc, [id, player]) => {
@@ -156,7 +166,13 @@ const handlePlayCard = async (state: GameState, action: GameAction): Promise<Gam
       targetPlayerId
     );
     
-    console.log(`[Game Reducer] Received interpretation with ${interpretation.stateChanges.length} state changes`);
+    // Check if the card can be played according to the LLM
+    if (!interpretation.canPlayCard) {
+      console.log(`[Game Reducer] LLM determined that card ${playedCard.name} cannot be played with current energy/status effects`);
+      return state; // Return original state without changes
+    }
+    
+    console.log(`[Game Reducer] Received interpretation with ${interpretation.stateChanges.length} state changes`, interpretation.stateChanges);
     
     // Process the interpreted effects
     let stateWithEffects = newState;
@@ -184,7 +200,7 @@ const handlePlayCard = async (state: GameState, action: GameAction): Promise<Gam
     // Debug the final state before returning
     const finalState = {
       ...stateWithEffects,
-      phase: 'action'
+      phase: PHASES.ACTION
     };
     
     // Log player stats to verify effects were applied
@@ -236,7 +252,7 @@ const handlePlayCard = async (state: GameState, action: GameAction): Promise<Gam
     // Debug the final state before returning
     const finalState = {
       ...stateWithEffects,
-      phase: 'action'
+      phase: PHASES.ACTION
     };
     
     // Log player stats to verify effects were applied
@@ -439,7 +455,7 @@ const handleEndTurn = (state: GameState, action: GameAction): GameState => {
   }
   
   // Process end-of-turn effects
-  let newState = { ...state, phase: 'turnEnd' };
+  let newState = { ...state, phase: PHASES.TURN_END };
   
   // Clear cards for the current player
   newState = stateHelpers.clearCardsAtEndOfTurn(newState, action.playerId);
@@ -461,7 +477,7 @@ const handleEndTurn = (state: GameState, action: GameAction): GameState => {
   // Update phase to turnStart for the next player
   return {
     ...newState,
-    phase: 'turnStart'
+    phase: PHASES.TURN_START
   };
 };
 
@@ -481,10 +497,10 @@ const handleSelectCards = (state: GameState, action: GameAction): GameState => {
   const newState = stateHelpers.selectInitialCards(state, action.playerId, selectedCardIds);
   
   // If this is during initialization, move to the action phase
-  if (state.phase === 'init') {
+  if (state.phase === PHASES.INIT) {
     return {
       ...newState,
-      phase: 'action'
+      phase: PHASES.ACTION
     };
   }
   

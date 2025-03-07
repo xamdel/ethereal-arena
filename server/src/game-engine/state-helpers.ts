@@ -51,6 +51,7 @@ export const addPlayer = (
     maxEnergy: 5,
     draw: 5,
     hand: [], // Cards currently in hand
+    deck: [], // We don't have a real deck - cards are generated dynamically
     discard: [], // Cards played this turn
     statusEffects: [],
     isActive: false,
@@ -351,9 +352,11 @@ export const playCard = (
   const card = player.hand[cardIndex];
   
   // Check if player has enough energy
+  // Note: We only do a basic check here - the card might have cost reductions 
+  // that will be applied by the effect interpreter
   if (player.energy < card.cost) {
-    // Not enough energy
-    return { state, playedCard: null };
+    console.log(`[playCard] Player ${playerId} attempting to play card with cost ${card.cost} but only has ${player.energy} energy`);
+    console.log(`[playCard] Allowing play attempt - actual cost will be determined by effect interpreter`);
   }
   
   // Remove the card from hand
@@ -363,8 +366,7 @@ export const playCard = (
   // Add card to discard pile (played this turn)
   const newDiscard = [...player.discard, card];
   
-  // Use energy
-  const newEnergy = player.energy - card.cost;
+  // Don't deduct energy here - this will be handled by the effect interpreter
   
   // Update the player
   const newState = {
@@ -374,8 +376,7 @@ export const playCard = (
       [playerId]: {
         ...player,
         hand: newHand,
-        discard: newDiscard,
-        energy: newEnergy
+        discard: newDiscard
       }
     }
   };

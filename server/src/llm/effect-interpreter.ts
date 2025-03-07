@@ -60,7 +60,20 @@ export class EffectInterpreter {
   public async interpretCardEffects(context: CardPlayContext): Promise<{
     stateChanges: StateChangeAction[];
     narrative: string;
+    canPlayCard: boolean;
   }> {
+    // Step 1: Check if the player can play the card based on cost vs available energy
+    const canPlay = await this.checkIfPlayerCanPlayCard(context);
+    
+    if (!canPlay) {
+      return {
+        stateChanges: [],
+        narrative: "Not enough energy to play this card.",
+        canPlayCard: false
+      };
+    }
+
+    // Step 2: If player can play the card, interpret the effects
     const prompt = this.createEffectInterpretationPrompt(context);
     const response = await this.llmClient.complete(prompt, {
       temperature: 0.3,
@@ -71,8 +84,53 @@ export class EffectInterpreter {
 
     return {
       stateChanges: interpretation.stateChanges,
-      narrative: interpretation.narrative
+      narrative: interpretation.narrative,
+      canPlayCard: true
     };
+  }
+  
+  private async checkIfPlayerCanPlayCard(context: CardPlayContext): Promise<boolean> {
+    const { card, playerId, gameState } = context;
+    const player = gameState.players[playerId];
+    
+    // Create a minimal prompt to check if the card can be played
+    const prompt = `
+Determine if the player can play this card based on energy cost and any status effects.
+
+CARD:
+- Name: ${card.name}
+- Base Cost: ${card.cost}
+- Effects: ${card.base_effects}
+- Special Effects: ${card.wildcard_effect}
+
+PLAYER:
+- Available Energy: ${player.energy}
+- Status Effects: ${player.statusEffects.length > 0 ? 
+  player.statusEffects.map(effect => 
+    `${effect.name} (${effect.description})`
+  ).join(', ') : 'None'}
+
+Consider:
+1. The card's base cost vs player's available energy
+2. Any status effects that might reduce or increase card costs
+3. Any special card effects that might reduce its own cost
+
+Respond only with:
+{"Y"} if the player can play the card
+{"N"} if the player cannot play the card
+`;
+
+    const response = await this.llmClient.complete(prompt, {
+      temperature: 0.1,
+      systemPrompt: `You are a card game rules engine. Answer questions about card costs and playability with exact answers. Respond with only {"Y"} or {"N"}.`,
+      maxTokens: 10, // Keep it very short to minimize latency
+    });
+
+    // Parse the response to get Y/N
+    const canPlay = response.content.includes('{"Y"}');
+    console.log(`[EffectInterpreter] Can player play card ${card.name}? ${canPlay ? 'Yes' : 'No'}`);
+    
+    return canPlay;
   }
 
   private getEffectInterpretationSystemPrompt(): string {
@@ -101,6 +159,8 @@ CARD DETAILS:
 - Name: ${card.name}
 - Cost: ${card.cost}
 - Description: ${card.description}
+- Base effects: ${card.base_effects}
+- Special effects: ${card.wildcard_effect}
 
 CURRENT GAME STATE:
 - Turn: ${gameState.turn}
@@ -190,13 +250,14 @@ OPPONENT:
 }
 
 Your task:
-1. Interpret the card effect in the context of the current game state
+1. Interpret the card effect(s) in the context of the current game state
 2. Consider how any status effects might modify the outcome
 3. Translate the card effect into specific state change actions
 4. Provide a narrative description of what happens
 
 Rules for interpretation:
 - Interpret card effects fairly and consistently
+- Provide a state change action for ALL effects
 - Provide a "reasoning" field to explain each state change
 - For status effects, specify duration (typically 2-3 turns)
 - For status effect timing, use: immediate, turn-start, turn-end, on-attack, on-damaged
@@ -261,7 +322,9 @@ EXAMPLE 2 - Status effect interaction:
       "reasoning": "Lightning temporarily paralyzes the target"
     }
   ]
-}`;
+}
+  
+IMPORTANT: Make sure to include a state change action for EVERY card effect, both base and special`;
 
     return prompt;
   }

@@ -90,16 +90,12 @@ async function exampleUsage() {
     console.log('\nInterpretation Results:');
     console.log('\nNarrative:', interpretedEffects.narrative);
     
-    console.log('\nBase Effects:');
-    interpretedEffects.baseEffects.forEach(effect => {
-      console.log(`- ${effect.description} (${effect.type}, ${effect.timing})`);
-    });
-    
-    console.log('\nWildcard Effects:');
-    interpretedEffects.wildcardEffects.forEach(effect => {
-      console.log(`- ${effect.description} (${effect.type}, ${effect.timing})`);
-      if (effect.type === 'status_effect') {
-        console.log(`  Status: ${effect.statusName} - ${effect.statusDescription} for ${effect.duration} turns`);
+    console.log('\nState Changes:');
+    interpretedEffects.stateChanges.forEach((change) => {
+      console.log(`- ${change.action} on ${change.target}, value: ${change.value}`);
+      console.log(`  Reasoning: ${change.reasoning}`);
+      if (change.action === 'ADD_STATUS_EFFECT') {
+        console.log(`  Status: ${change.statusName} - ${change.statusDescription} for ${change.duration} turns`);
       }
     });
 

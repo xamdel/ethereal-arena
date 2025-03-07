@@ -20,7 +20,11 @@ export async function generateCards(count: number = 5, playerContext?: any) {
 }
 
 // Convenience function to interpret a card's effects
-export async function interpretCardEffects(card: any, playerId: string, gameState: any) {
+export async function interpretCardEffects(card: any, playerId: string, gameState: any): Promise<{
+  stateChanges: StateChangeAction[];
+  narrative: string;
+  canPlayCard: boolean;
+}> {
   console.log(`[LLM] interpretCardEffects called for card: ${card.name} (${card.id})`);
   console.log(`[LLM] Player ID: ${playerId}`);
   console.log(`[LLM] Game state contains ${Object.keys(gameState.players).length} players`);
@@ -30,7 +34,7 @@ export async function interpretCardEffects(card: any, playerId: string, gameStat
   
   try {
     console.log(`[LLM] Calling effectInterpreter.interpretCardEffects...`);
-    const result = await effectInterpreter.interpretCardEffects({
+    const result = await effectInterpreter().interpretCardEffects({
       card,
       playerId,
       targetId: gameState.targetId,
@@ -38,6 +42,7 @@ export async function interpretCardEffects(card: any, playerId: string, gameStat
     });
     
     console.log(`[LLM] Effect interpretation completed successfully`);
+    console.log(`[LLM] Can play card: ${result.canPlayCard}`);
     console.log(`[LLM] Returned ${result.stateChanges.length} state changes`);
     
     return result;

@@ -198,10 +198,10 @@ export class LLMClient {
       } else if (status === 401 || status === 403) {
         type = 'auth';
         message = 'Authentication error';
-      } else if (status >= 500) {
+      } else if (status && status >= 500) {
         type = 'server';
         message = 'Server error';
-      } else if (status >= 400) {
+      } else if (status && status >= 400) {
         type = 'client';
         message = error.message || 'Client error';
       }

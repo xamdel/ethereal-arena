@@ -87,6 +87,7 @@ export class LLMService {
   ): Promise<{
     stateChanges: any[];
     narrative: string;
+    canPlayCard: boolean;
   }> {
     console.log(`[LLMService] interpretCardEffects called for card: ${card.name} (${card.id})`);
     console.log(`[LLMService] Player ID: ${playerId}, Target ID: ${targetId || 'not specified'}`);
@@ -104,11 +105,13 @@ export class LLMService {
       });
       
       console.log(`[LLMService] Card effect interpretation completed successfully`);
+      console.log(`[LLMService] Can play card: ${result.canPlayCard}`);
       console.log(`[LLMService] Received ${result.stateChanges?.length || 0} state changes`);
       
       return {
         stateChanges: result.stateChanges || [],
-        narrative: result.narrative
+        narrative: result.narrative,
+        canPlayCard: result.canPlayCard
       };
     } catch (error) {
       console.error(`[LLMService] Error interpreting card effects: ${(error as Error).message}`);
