@@ -438,6 +438,25 @@ export const processNextEffect = (
       }
       break;
       
+    case 'remove_block':
+      if (effect.value !== undefined && effect.target) {
+        console.log(`[StateHelpers] Removing ${effect.value} block from ${effect.target}`);
+        // If player has less block than the removal amount, just set to 0
+        const player = newState.players[effect.target];
+        const newBlock = Math.max(0, player.block - effect.value);
+        newState = {
+          ...newState,
+          players: {
+            ...newState.players,
+            [effect.target]: {
+              ...player,
+              block: newBlock
+            }
+          }
+        };
+      }
+      break;
+      
     case 'heal':
       if (effect.value !== undefined && effect.target) {
         console.log(`[StateHelpers] Applying ${effect.value} healing to ${effect.target}`);
@@ -449,6 +468,46 @@ export const processNextEffect = (
       if (effect.value !== undefined && effect.target) {
         console.log(`[StateHelpers] Applying ${effect.value} energy to ${effect.target}`);
         newState = applyEnergyChange(newState, effect.target, effect.value);
+      }
+      break;
+      
+    case 'draw':
+      if (effect.value !== undefined && effect.target) {
+        console.log(`[StateHelpers] Drawing ${effect.value} cards for ${effect.target}`);
+        // Draw multiple cards
+        let stateAfterDraw = newState;
+        for (let i = 0; i < effect.value; i++) {
+          stateAfterDraw = drawCard(stateAfterDraw, effect.target);
+        }
+        newState = stateAfterDraw;
+      }
+      break;
+      
+    case 'discard':
+      if (effect.value !== undefined && effect.target) {
+        console.log(`[StateHelpers] Discarding ${effect.value} cards for ${effect.target}`);
+        // Randomly discard cards from hand
+        const player = newState.players[effect.target];
+        if (player && player.hand.length > 0) {
+          // Shuffle hand to randomize discard
+          const shuffledHand = [...player.hand].sort(() => Math.random() - 0.5);
+          // Take the number of cards to discard (or all cards if not enough)
+          const numToDiscard = Math.min(effect.value, shuffledHand.length);
+          const discardedCards = shuffledHand.slice(0, numToDiscard);
+          const remainingCards = shuffledHand.slice(numToDiscard);
+          
+          newState = {
+            ...newState,
+            players: {
+              ...newState.players,
+              [effect.target]: {
+                ...player,
+                hand: remainingCards,
+                discard: [...player.discard, ...discardedCards]
+              }
+            }
+          };
+        }
       }
       break;
       
@@ -466,8 +525,65 @@ export const processNextEffect = (
       }
       break;
       
-    // Add more effect types as needed
-    
+    case 'remove_status':
+      if (effect.target && effect.statusName) {
+        console.log(`[StateHelpers] Removing status effect ${effect.statusName} from ${effect.target}`);
+        const player = newState.players[effect.target];
+        if (player) {
+          // Filter out the status effect with the matching name
+          const newStatusEffects = player.statusEffects.filter(
+            status => status.name !== effect.statusName
+          );
+          
+          newState = {
+            ...newState,
+            players: {
+              ...newState.players,
+              [effect.target]: {
+                ...player,
+                statusEffects: newStatusEffects
+              }
+            }
+          };
+        }
+      }
+      break;
+      
+    case 'modify_status':
+      if (effect.target && effect.statusName) {
+        console.log(`[StateHelpers] Modifying status effect ${effect.statusName} for ${effect.target}`);
+        const player = newState.players[effect.target];
+        if (player) {
+          // Update the matching status effect
+          const newStatusEffects = player.statusEffects.map(status => {
+            if (status.name === effect.statusName) {
+              return {
+                ...status,
+                // Update duration if provided
+                duration: effect.duration !== undefined ? effect.duration : status.duration,
+                // If the effect has a value property, add it to the description
+                description: effect.value !== undefined 
+                  ? status.description.replace(/\d+/, effect.value.toString())
+                  : status.description
+              };
+            }
+            return status;
+          });
+          
+          newState = {
+            ...newState,
+            players: {
+              ...newState.players,
+              [effect.target]: {
+                ...player,
+                statusEffects: newStatusEffects
+              }
+            }
+          };
+        }
+      }
+      break;
+      
     default:
       // Unknown effect type, just remove it from the queue
       console.log(`[StateHelpers] Unknown effect type: ${effect.type}, skipping`);

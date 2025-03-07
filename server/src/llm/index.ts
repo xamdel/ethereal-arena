@@ -1,7 +1,7 @@
 // Export types and classes
 export { LLMClient, LLMResponse, LLMAPIError } from './api-client';
 export { CardGenerator } from './card-generator';
-export { EffectInterpreter, InterpretedEffect } from './effect-interpreter';
+export { EffectInterpreter, StateChangeAction } from './effect-interpreter';
 
 // Export singleton instances
 import { llmClient } from './api-client';
@@ -38,7 +38,7 @@ export async function interpretCardEffects(card: any, playerId: string, gameStat
     });
     
     console.log(`[LLM] Effect interpretation completed successfully`);
-    console.log(`[LLM] Returned ${result.baseEffects.length} base effects and ${result.wildcardEffects.length} wildcard effects`);
+    console.log(`[LLM] Returned ${result.stateChanges.length} state changes`);
     
     return result;
   } catch (error) {

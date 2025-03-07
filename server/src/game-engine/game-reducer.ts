@@ -156,101 +156,20 @@ const handlePlayCard = async (state: GameState, action: GameAction): Promise<Gam
       targetPlayerId
     );
     
-    console.log(`[Game Reducer] Received interpretation with ${interpretation.baseEffects.length} base effects and ${interpretation.wildcardEffects.length} wildcard effects`);
+    console.log(`[Game Reducer] Received interpretation with ${interpretation.stateChanges.length} state changes`);
     
     // Process the interpreted effects
     let stateWithEffects = newState;
     
-    // Add base effects to queue
-    interpretation.baseEffects.forEach(effect => {
-      console.log(`[Game Reducer] Adding base effect to queue: ${effect.type} (${effect.value || 'no value'}) targeting ${effect.target}`);
+    // Convert StateChangeActions to QueuedEffects and add to the queue
+    interpretation.stateChanges.forEach(stateChange => {
+      // Map the new state change format to game engine effects
+      const queuedEffect = mapStateChangeToQueuedEffect(stateChange, action.playerId, newState, cardId, action.id);
       
-      // Map LLM effect types to engine effect types
-      let engineEffectType = effect.type;
-      if (effect.type === 'status_effect') {
-        engineEffectType = 'status';
+      if (queuedEffect) {
+        console.log(`[Game Reducer] Adding effect to queue: ${queuedEffect.type} targeting ${queuedEffect.target}`);
+        stateWithEffects = stateHelpers.addEffectToQueue(stateWithEffects, queuedEffect);
       }
-      
-      // Make sure the target ID exists in the game state
-      let targetId = effect.target;
-      
-      // Special handling for simple target values
-      if (targetId === 'self' || targetId === 'SELF' || targetId === 'PLAYER') {
-        targetId = action.playerId;
-        console.log(`[Game Reducer] Mapped '${effect.target}' target to actual player ID: ${targetId}`);
-      } else if (targetId === 'opponent' || targetId === 'OPPONENT') {
-        // Find opponent ID
-        const opponentId = Object.keys(newState.players).find(id => id !== action.playerId);
-        if (opponentId) {
-          targetId = opponentId;
-          console.log(`[Game Reducer] Mapped '${effect.target}' target to actual opponent ID: ${targetId}`);
-        }
-      }
-      
-      // Verify the target exists
-      if (!newState.players[targetId]) {
-        console.error(`[Game Reducer] Target player ID ${targetId} not found in game state. Available players: ${Object.keys(newState.players).join(', ')}`);
-        return; // Skip this effect
-      }
-      
-      stateWithEffects = stateHelpers.addEffectToQueue(stateWithEffects, {
-        type: engineEffectType,
-        value: effect.value,
-        source: effect.source || action.playerId,
-        target: targetId,
-        card: cardId,
-        timing: effect.timing || 'immediate',
-        actionId: action.id,
-        statusName: effect.statusName,
-        statusDescription: effect.statusDescription,
-        duration: effect.duration
-      });
-    });
-    
-    // Add wildcard effects to queue
-    interpretation.wildcardEffects.forEach(effect => {
-      console.log(`[Game Reducer] Adding wildcard effect to queue: ${effect.type} (${effect.value || 'no value'}) targeting ${effect.target}`);
-      
-      // Map LLM effect types to engine effect types
-      let engineEffectType = effect.type;
-      if (effect.type === 'status_effect') {
-        engineEffectType = 'status';
-      }
-      
-      // Make sure the target ID exists in the game state
-      let targetId = effect.target;
-      
-      // Special handling for simple target values
-      if (targetId === 'self' || targetId === 'SELF' || targetId === 'PLAYER') {
-        targetId = action.playerId;
-        console.log(`[Game Reducer] Mapped '${effect.target}' target to actual player ID: ${targetId}`);
-      } else if (targetId === 'opponent' || targetId === 'OPPONENT') {
-        // Find opponent ID
-        const opponentId = Object.keys(newState.players).find(id => id !== action.playerId);
-        if (opponentId) {
-          targetId = opponentId;
-          console.log(`[Game Reducer] Mapped '${effect.target}' target to actual opponent ID: ${targetId}`);
-        }
-      }
-      
-      // Verify the target exists
-      if (!newState.players[targetId]) {
-        console.error(`[Game Reducer] Target player ID ${targetId} not found in game state. Available players: ${Object.keys(newState.players).join(', ')}`);
-        return; // Skip this effect
-      }
-      
-      stateWithEffects = stateHelpers.addEffectToQueue(stateWithEffects, {
-        type: engineEffectType,
-        value: effect.value,
-        source: effect.source || action.playerId,
-        target: targetId,
-        card: cardId,
-        timing: effect.timing || 'immediate',
-        actionId: action.id,
-        statusName: effect.statusName,
-        statusDescription: effect.statusDescription,
-        duration: effect.duration
-      });
     });
     
     // Add narrative to game state for UI
@@ -333,6 +252,179 @@ const handlePlayCard = async (state: GameState, action: GameAction): Promise<Gam
     });
     
     return finalState;
+  }
+};
+
+/**
+ * Map the new StateChangeAction format to the QueuedEffect format
+ * expected by the game engine
+ */
+const mapStateChangeToQueuedEffect = (
+  stateChange: any, 
+  playerId: string, 
+  gameState: GameState, 
+  cardId: string, 
+  actionId: string
+) => {
+  // Get target player ID based on 'self' or 'opponent'
+  let targetId = getTargetId(stateChange.target, playerId, gameState);
+  
+  // If target doesn't exist in game state, skip this effect
+  if (!targetId || !gameState.players[targetId]) {
+    console.error(`[Game Reducer] Target '${stateChange.target}' could not be mapped to a valid player ID`);
+    return null;
+  }
+  
+  // Default timing
+  const timing = stateChange.timing || 'immediate';
+  
+  // Map the action type to game engine effect type
+  switch (stateChange.action) {
+    case 'REMOVE_HP':
+      return {
+        id: crypto.randomUUID(),
+        type: 'damage',
+        value: stateChange.value,
+        source: playerId,
+        target: targetId,
+        card: cardId,
+        timing,
+        actionId
+      };
+      
+    case 'ADD_HP':
+      return {
+        id: crypto.randomUUID(),
+        type: 'heal',
+        value: stateChange.value,
+        source: playerId,
+        target: targetId,
+        card: cardId,
+        timing,
+        actionId
+      };
+      
+    case 'ADD_BLOCK':
+      return {
+        id: crypto.randomUUID(),
+        type: 'block',
+        value: stateChange.value,
+        source: playerId,
+        target: targetId,
+        card: cardId,
+        timing,
+        actionId
+      };
+      
+    case 'REMOVE_BLOCK':
+      return {
+        id: crypto.randomUUID(),
+        type: 'remove_block',
+        value: stateChange.value,
+        source: playerId,
+        target: targetId,
+        card: cardId,
+        timing,
+        actionId
+      };
+      
+    case 'ADD_ENERGY':
+    case 'REMOVE_ENERGY':
+      return {
+        id: crypto.randomUUID(),
+        type: 'energy',
+        // For REMOVE_ENERGY, we make the value negative
+        value: stateChange.action === 'ADD_ENERGY' ? stateChange.value : -stateChange.value,
+        source: playerId,
+        target: targetId,
+        card: cardId,
+        timing,
+        actionId
+      };
+      
+    case 'DRAW':
+      return {
+        id: crypto.randomUUID(),
+        type: 'draw',
+        value: stateChange.value,
+        source: playerId,
+        target: targetId,
+        card: cardId,
+        timing,
+        actionId
+      };
+      
+    case 'DISCARD':
+      return {
+        id: crypto.randomUUID(),
+        type: 'discard',
+        value: stateChange.value,
+        source: playerId,
+        target: targetId,
+        card: cardId,
+        timing,
+        actionId
+      };
+      
+    case 'ADD_STATUS_EFFECT':
+      return {
+        id: crypto.randomUUID(),
+        type: 'status',
+        value: stateChange.value,
+        source: playerId,
+        target: targetId,
+        card: cardId,
+        timing,
+        actionId,
+        statusName: stateChange.statusName,
+        statusDescription: stateChange.statusDescription,
+        duration: stateChange.duration
+      };
+      
+    case 'REMOVE_STATUS_EFFECT':
+      return {
+        id: crypto.randomUUID(),
+        type: 'remove_status',
+        source: playerId,
+        target: targetId,
+        card: cardId,
+        timing,
+        actionId,
+        statusName: stateChange.statusName
+      };
+      
+    case 'MODIFY_STATUS_EFFECT':
+      return {
+        id: crypto.randomUUID(),
+        type: 'modify_status',
+        value: stateChange.value,
+        source: playerId,
+        target: targetId,
+        card: cardId,
+        timing,
+        actionId,
+        statusName: stateChange.statusName,
+        duration: stateChange.duration
+      };
+      
+    default:
+      console.error(`[Game Reducer] Unknown action type: ${stateChange.action}`);
+      return null;
+  }
+};
+
+/**
+ * Helper function to map 'self' or 'opponent' to actual player IDs
+ */
+const getTargetId = (target: string, playerId: string, gameState: GameState): string | null => {
+  if (target === 'self') {
+    return playerId;
+  } else if (target === 'opponent') {
+    // Find opponent ID
+    return Object.keys(gameState.players).find(id => id !== playerId) || null;
+  } else {
+    // In case the target is already an actual player ID
+    return target;
   }
 };
 

@@ -77,6 +77,7 @@ export class LLMService {
   
   /**
    * Interpret the effects of a played card
+   * Now returns stateChanges array in the new format
    */
   async interpretCardEffects(
     card: Card,
@@ -84,8 +85,7 @@ export class LLMService {
     gameState: LLMGameState,
     targetId?: string
   ): Promise<{
-    baseEffects: InterpretedEffect[];
-    wildcardEffects: InterpretedEffect[];
+    stateChanges: any[];
     narrative: string;
   }> {
     console.log(`[LLMService] interpretCardEffects called for card: ${card.name} (${card.id})`);
@@ -96,6 +96,7 @@ export class LLMService {
     console.log(`[LLMService] Card has wildcard effect: ${!!card.wildcard_effect}`);
     
     try {
+      // Call the effect interpreter with the required context
       const result = await interpretCardEffects(card, playerId, {
         ...gameState,
         // If targetId is provided, add it to the context
@@ -103,7 +104,12 @@ export class LLMService {
       });
       
       console.log(`[LLMService] Card effect interpretation completed successfully`);
-      return result;
+      console.log(`[LLMService] Received ${result.stateChanges?.length || 0} state changes`);
+      
+      return {
+        stateChanges: result.stateChanges || [],
+        narrative: result.narrative
+      };
     } catch (error) {
       console.error(`[LLMService] Error interpreting card effects: ${(error as Error).message}`);
       throw error;
