@@ -99,6 +99,71 @@ export const onGameStateUpdate = (callback: (data: { gameState: GameState }) => 
 };
 
 /**
+ * Subscribe to LLM stream start events
+ * @param callback Function to call when an LLM stream starts
+ */
+export const onLLMStreamStart = (callback: (data: { 
+  cardId: string;
+  playerId: string;
+  timestamp: number;
+}) => void): void => {
+  if (!socket) {
+    socket = initSocket();
+  }
+  
+  socket.on('llm-stream-start', callback);
+};
+
+/**
+ * Subscribe to LLM stream chunk events
+ * @param callback Function to call when an LLM stream chunk is received
+ */
+export const onLLMStreamChunk = (callback: (data: {
+  type: string;
+  content: string;
+  cardId: string;
+  playerId: string;
+}) => void): void => {
+  if (!socket) {
+    socket = initSocket();
+  }
+  
+  socket.on('llm-stream-chunk', callback);
+};
+
+/**
+ * Subscribe to LLM stream end events
+ * @param callback Function to call when an LLM stream ends
+ */
+export const onLLMStreamEnd = (callback: (data: {
+  cardId: string;
+  playerId: string;
+  timestamp: number;
+}) => void): void => {
+  if (!socket) {
+    socket = initSocket();
+  }
+  
+  socket.on('llm-stream-end', callback);
+};
+
+/**
+ * Subscribe to LLM stream error events
+ * @param callback Function to call when an LLM stream errors
+ */
+export const onLLMStreamError = (callback: (data: {
+  message: string;
+  cardId?: string;
+  playerId?: string;
+}) => void): void => {
+  if (!socket) {
+    socket = initSocket();
+  }
+  
+  socket.on('llm-stream-error', callback);
+};
+
+/**
  * Subscribe to player join events
  * @param callback Function to call when a new player joins
  */

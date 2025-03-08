@@ -184,6 +184,27 @@ const handlePlayCard = async (state: GameState, action: GameAction): Promise<Gam
     stateWithEnergyCost = stateHelpers.addEffectToQueue(stateWithEnergyCost, energyCostEffect);
     stateWithEnergyCost = stateHelpers.processAllEffects(stateWithEnergyCost);
     
+    // Set on_play_description as the initial narrative while we wait for effect interpretations
+    if (playedCard.on_play_description) {
+      // Process placeholders in the description
+      let processedDescription = playedCard.on_play_description;
+      
+      // Replace [player] with the player's name
+      const playerName = state.players[action.playerId]?.name || "Player";
+      processedDescription = processedDescription.replace(/\[player\]/g, playerName);
+      
+      // Replace [opponent] with the opponent's name
+      const opponentId = Object.keys(state.players).find(id => id !== action.playerId);
+      const opponentName = opponentId ? state.players[opponentId]?.name || "Opponent" : "Opponent";
+      processedDescription = processedDescription.replace(/\[opponent\]/g, opponentName);
+      
+      stateWithEnergyCost = {
+        ...stateWithEnergyCost,
+        lastNarrative: processedDescription,  // For backward compatibility
+        cardNarrative: processedDescription    // Card narrative field
+      };
+    }
+    
     // 3. After applying the cost, clear the cache
     const { llmService } = await import('./llm-service');
     await llmService.clearCardEnergyCostCache(action.playerId);
@@ -226,10 +247,17 @@ const handlePlayCard = async (state: GameState, action: GameAction): Promise<Gam
       }
     });
     
-    // Add narrative to game state for UI
+    // Add narratives to game state for UI
+    // Collect effect narrations
+    const effectNarrations = interpretation.stateChanges
+      .filter(change => change.narration)
+      .map(change => change.narration);
+    
     stateWithEffects = {
       ...stateWithEffects,
-      lastNarrative: interpretation.narrative
+      cardNarrative: interpretation.narrative,      // Overall card narrative
+      effectNarrations: effectNarrations,           // Individual effect narrations
+      lastNarrative: interpretation.narrative       // For backward compatibility
     };
     
     // Process immediate effects
@@ -386,7 +414,8 @@ const mapStateChangeToQueuedEffect = (
         target: targetId,
         card: cardId,
         timing,
-        actionId
+        actionId,
+        narration: stateChange.narration // Include narration in the effect
       };
       
     case 'ADD_HP':
@@ -398,7 +427,8 @@ const mapStateChangeToQueuedEffect = (
         target: targetId,
         card: cardId,
         timing,
-        actionId
+        actionId,
+        narration: stateChange.narration
       };
       
     case 'ADD_BLOCK':
@@ -410,7 +440,8 @@ const mapStateChangeToQueuedEffect = (
         target: targetId,
         card: cardId,
         timing,
-        actionId
+        actionId,
+        narration: stateChange.narration
       };
       
     case 'REMOVE_BLOCK':
@@ -422,7 +453,8 @@ const mapStateChangeToQueuedEffect = (
         target: targetId,
         card: cardId,
         timing,
-        actionId
+        actionId,
+        narration: stateChange.narration
       };
       
     case 'ADD_ENERGY':
@@ -436,7 +468,8 @@ const mapStateChangeToQueuedEffect = (
         target: targetId,
         card: cardId,
         timing,
-        actionId
+        actionId,
+        narration: stateChange.narration
       };
       
     case 'DRAW':
@@ -448,7 +481,8 @@ const mapStateChangeToQueuedEffect = (
         target: targetId,
         card: cardId,
         timing,
-        actionId
+        actionId,
+        narration: stateChange.narration
       };
       
     case 'DISCARD':
@@ -460,7 +494,8 @@ const mapStateChangeToQueuedEffect = (
         target: targetId,
         card: cardId,
         timing,
-        actionId
+        actionId,
+        narration: stateChange.narration
       };
       
     case 'ADD_STATUS_EFFECT':
@@ -475,7 +510,8 @@ const mapStateChangeToQueuedEffect = (
         actionId,
         statusName: stateChange.statusName,
         statusDescription: stateChange.statusDescription,
-        duration: stateChange.duration
+        duration: stateChange.duration,
+        narration: stateChange.narration
       };
       
     case 'REMOVE_STATUS_EFFECT':
@@ -487,7 +523,8 @@ const mapStateChangeToQueuedEffect = (
         card: cardId,
         timing,
         actionId,
-        statusName: stateChange.statusName
+        statusName: stateChange.statusName,
+        narration: stateChange.narration
       };
       
     case 'MODIFY_STATUS_EFFECT':
@@ -501,7 +538,8 @@ const mapStateChangeToQueuedEffect = (
         timing,
         actionId,
         statusName: stateChange.statusName,
-        duration: stateChange.duration
+        duration: stateChange.duration,
+        narration: stateChange.narration
       };
       
     default:

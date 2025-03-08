@@ -69,13 +69,37 @@ export class CardGenerator {
     });
 
     // Call the LLM with the prompt
-    const response = await this.llmClient.complete(prompt, {
-      temperature,
-      systemPrompt: this.getCardGenerationSystemPrompt(),
-    });
+    console.log(`[CardGenerator] Calling LLM to generate ${count} cards with temperature ${temperature}`);
+    
+    try {
+      const response = await this.llmClient.complete(prompt, {
+        temperature,
+        systemPrompt: this.getCardGenerationSystemPrompt(),
+      });
 
-    // Parse the response to extract cards
-    const parsedCards = this.parseCardResponse(response.content);
+      console.log(`[CardGenerator] LLM response received, content length: ${response.content?.length || 0}`);
+      
+      if (!response.content) {
+        console.error(`[CardGenerator] Empty response from LLM`);
+        throw new Error('Empty response from LLM during card generation');
+      }
+      
+      // Parse the response to extract cards
+      console.log(`[CardGenerator] Parsing card response`);
+      const parsedCards = this.parseCardResponse(response.content);
+      
+      console.log(`[CardGenerator] Successfully parsed ${parsedCards.length} cards`);
+      
+      if (parsedCards.length === 0) {
+        console.error(`[CardGenerator] No cards parsed from LLM response`);
+        throw new Error('No cards could be parsed from LLM response');
+      }
+    } catch (error) {
+      console.error(`[CardGenerator] Error during card generation:`, error);
+      // Provide some fallback mock cards to prevent game failure
+      // console.log(`[CardGenerator] Returning fallback cards`);
+      // return this.generateFallbackCards(count);
+    }
     
     // Add IDs and metadata to the cards
     return parsedCards.map(card => ({
@@ -98,6 +122,7 @@ Each card should have:
 3. Base effects that are clear and specific (e.g. Deal damage, Gain block)
 4. A wildcard effect that adds a unique twist but remains balanced (optional)
 5. A brief art prompt describing the card's visual appearance
+6. An on_play_description describing what occurs just before the card's effects (e.g. "[player] raises their weapon, preparing to strike")
 
 Card balance should be roughly 5 points of damage/block/healing per 1 point of energy, but wildcard effects should be taken into consideration, i.e. a 3-cost card should not both deal 15 damage AND have a powerful wildcard effect.
 
@@ -131,7 +156,7 @@ For each card, provide:
 4. Description: A short flavor text describing the card
 5. Wildcard Effect: A unique twist that's creative but balanced (optional)
 6. Art Prompt: A brief visual description for the card
-7. On Play Description: A string describing what happens when the player begins playing the card
+7. On Play Description: A string describing what happens as the player begins playing the card
 8. Flavor Text: An additional short flavor text (optional - don't include every time)
 
 Guidelines:

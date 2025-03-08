@@ -175,6 +175,72 @@ export class LLMService {
   }
   
   /**
+   * Create a stream for interpreting card effects
+   * Returns the stream directly for handling by socket
+   */
+  async createCardEffectsStream(
+    card: Card,
+    playerId: string,
+    gameState: LLMGameState,
+    gameId: string,
+    targetId?: string
+  ) {
+    console.log(`[LLMService] createCardEffectsStream called for card: ${card.name} (${card.id})`);
+    console.log(`[LLMService] Player ID: ${playerId}, Game ID: ${gameId}`);
+    console.log(`[LLMService] Card details:`, JSON.stringify({
+      id: card.id,
+      name: card.name,
+      cost: card.cost,
+      type: card.type,
+      rarity: card.rarity,
+      base_effects_count: card.base_effects?.length || 0,
+      has_wildcard: !!card.wildcard_effect,
+      has_description: !!card.on_play_description,
+    }));
+    console.log(`[LLMService] Game state has ${Object.keys(gameState.players).length} players`);
+    
+    try {
+      // Import dynamically to avoid circular dependencies
+      const { effectInterpreter } = await import('../llm');
+      const { llmClient } = await import('../llm/api-client');
+      
+      // Create the effect interpretation prompt
+      const context = {
+        card,
+        playerId,
+        targetId,
+        gameState: {
+          ...gameState,
+          targetId
+        }
+      };
+      
+      // Get the prompt for effect interpretation
+      const prompt = effectInterpreter().createEffectInterpretationPrompt(context);
+      
+      console.log(`[LLMService] Generated effect interpretation prompt of ${prompt.length} characters`);
+      
+      // Create a stream and return it
+      console.log(`[LLMService] Creating LLM stream for effect interpretation`);
+      const stream = await llmClient.createStream(prompt, {
+        temperature: 0.3,
+        systemPrompt: effectInterpreter().getEffectInterpretationSystemPrompt(),
+      });
+      
+      console.log(`[LLMService] Stream created successfully, type:`, typeof stream);
+      
+      return stream;
+    } catch (error) {
+      console.error(`[LLMService] Error creating card effects stream: ${(error as Error).message}`);
+      console.error(`[LLMService] Error details:`, error instanceof Error ? {
+        name: error.name,
+        stack: error.stack
+      } : error);
+      throw error;
+    }
+  }
+  
+  /**
    * Generate a narrative for the current game state
    * This can be used for creating commentary or status updates
    */

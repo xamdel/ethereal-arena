@@ -28,6 +28,20 @@ interface UIState {
   showCardDetail: string | null;
   isConnected: boolean;
   lastSyncTime: number;
+  // Store the last played card for immediate access to on_play_description
+  lastPlayedCard: Card | null;
+  // Streaming state
+  isStreaming: boolean;
+  activeStreamCardId: string | null;
+  streamingError: string | null;
+  // Log entries for streaming updates
+  logEntries: {
+    type: string;
+    content: string;
+    cardId?: string;
+    playerId?: string;
+    timestamp: number;
+  }[];
   // Store energy cost calculations for highlighted cards
   cardEnergyCosts: {
     [cardId: string]: {
@@ -47,6 +61,11 @@ const initialUIState: UIState = {
   showCardDetail: null,
   isConnected: false,
   lastSyncTime: 0,
+  lastPlayedCard: null,
+  isStreaming: false,
+  activeStreamCardId: null,
+  streamingError: null,
+  logEntries: [],
   cardEnergyCosts: {}
 };
 
@@ -284,6 +303,40 @@ function uiStateReducer(state: UIState, action: any): UIState {
         lastSyncTime: Date.now()
       };
     
+    case 'SET_STREAMING':
+      return {
+        ...state,
+        isStreaming: action.payload.isStreaming,
+        activeStreamCardId: action.payload.cardId || null,
+        streamingError: action.payload.error || null
+      };
+    
+    case 'ADD_LOG_ENTRY':
+      // Prevent duplicate entries for the same content
+      const isDuplicate = state.logEntries.some(entry => 
+        entry.type === action.payload.type && 
+        entry.content === action.payload.content &&
+        entry.cardId === action.payload.cardId
+      );
+      
+      if (isDuplicate) {
+        return state;
+      }
+      
+      return {
+        ...state,
+        logEntries: [
+          ...state.logEntries,
+          {
+            type: action.payload.type,
+            content: action.payload.content,
+            cardId: action.payload.cardId,
+            playerId: action.payload.playerId,
+            timestamp: Date.now()
+          }
+        ]
+      };
+    
     case 'UPDATE_CARD_ENERGY_COST':
       return {
         ...state,
@@ -298,16 +351,30 @@ function uiStateReducer(state: UIState, action: any): UIState {
         }
       };
     
+    case 'SET_LAST_PLAYED_CARD':
+      return {
+        ...state,
+        lastPlayedCard: action.payload.card
+      };
+      
     case 'CLEAR_CARD_ENERGY_COSTS':
       return {
         ...state,
         cardEnergyCosts: {}
       };
     
+    case 'CLEAR_LOG_ENTRIES':
+      return {
+        ...state,
+        logEntries: []
+      };
+    
     case 'RESET_UI':
       return {
         ...initialUIState,
-        isConnected: state.isConnected
+        isConnected: state.isConnected,
+        lastPlayedCard: state.lastPlayedCard, // Preserve the last played card
+        logEntries: state.logEntries // Keep log entries
       };
     
     default:

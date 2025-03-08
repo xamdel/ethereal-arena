@@ -158,6 +158,8 @@ export function useGameActions() {
 
   // Play a card
   const playCard = async (cardId: string, targetPlayerId?: string) => {
+    console.log('[Debug] Starting playCard function with:', { cardId, targetPlayerId });
+    
     // Set UI state to processing
     dispatchUI({ 
       type: 'SET_PROCESSING', 
@@ -183,13 +185,46 @@ export function useGameActions() {
         return;
       }
       
+      // Store the card information for immediate access to on_play_description
+      const player = gameState.players[playerID];
+      const card = player.hand.find(c => c.id === cardId);
+      
+      console.log('[Debug] Found card to play:', card);
+      console.log('[Debug] Card has on_play_description:', card?.on_play_description);
+      
+      if (card) {
+        // Store the card in UI state for immediate access
+        dispatchUI({
+          type: 'SET_LAST_PLAYED_CARD',
+          payload: { card }
+        });
+        
+        console.log('[Debug] Set lastPlayedCard in UI state:', card.id);
+        
+        // Add immediate on_play_description to the log if available
+        if (card.on_play_description) {
+          dispatchUI({
+            type: 'ADD_LOG_ENTRY',
+            payload: {
+              type: 'on-play-description',
+              content: card.on_play_description.replace(/\[player\]/g, player.name || 'You')
+                .replace(/\[opponent\]/g, Object.values(gameState.players).find(p => p.id !== playerID)?.name || 'opponent'),
+              cardId,
+              playerId: playerID
+            }
+          });
+        }
+      }
+      
+      // Create action with streaming flag enabled
       const action: GameAction = {
         id: generateActionId(),
         type: ActionType.PLAY_CARD,
         playerId: playerID,
         payload: {
           cardId,
-          targetPlayerId
+          targetPlayerId,
+          streamResponse: true // Enable streaming for this card play
         },
         timestamp: Date.now(),
         gameId: gameState.id,
@@ -203,9 +238,6 @@ export function useGameActions() {
       
       // Clear the energy cost cache since the state has changed
       clearCardEnergyCosts();
-      
-      // Reset UI after the server response is processed
-      dispatchUI({ type: 'RESET_UI' });
     } catch (error) {
       console.error('Error playing card:', error);
       dispatchUI({ 

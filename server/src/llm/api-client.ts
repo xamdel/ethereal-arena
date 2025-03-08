@@ -100,6 +100,8 @@ export class LLMClient {
 
       for (let attempt = 0; attempt < this.config.maxRetries; attempt++) {
         try {
+          console.log(`[LLMClient] Sending request to ${model} with ${prompt.length} chars prompt`);
+          
           const completion = await this.openai.chat.completions.create({
             model,
             messages: [
@@ -116,8 +118,30 @@ export class LLMClient {
             temperature,
           });
 
+          // Log the raw response for debugging
+          console.log(`[LLMClient] Raw response:`, JSON.stringify({
+            id: completion.id,
+            model: completion.model,
+            object: completion.object,
+            created: completion.created,
+            choices_length: completion.choices?.length,
+            has_usage: !!completion.usage,
+            first_choice_finish_reason: completion.choices?.[0]?.finish_reason,
+            has_message_content: !!completion.choices?.[0]?.message?.content,
+          }));
+          
+          // Safety check for completion.choices
+          if (!completion.choices || !Array.isArray(completion.choices) || completion.choices.length === 0) {
+            console.error('[LLMClient] Invalid response format: No choices returned');
+            throw new Error('Invalid response from LLM API: No choices returned');
+          }
+          
           // Extract the content from the response
-          const content = completion.choices[0].message.content || '';
+          const content = completion.choices[0]?.message?.content || '';
+          
+          if (!content) {
+            console.warn('[LLMClient] Warning: Empty content returned from LLM API');
+          }
 
           return {
             content,
@@ -146,6 +170,214 @@ export class LLMClient {
       throw this.normalizeError(lastError);
     } catch (error: any) {
       throw this.normalizeError(error);
+    }
+  }
+  
+  /**
+   * Create a streaming completion request
+   * Uses native fetch with SSE handling instead of OpenAI SDK stream
+   * Returns an async generator that yields content chunks
+   */
+  public async *createStream(
+    prompt: string,
+    options: {
+      model?: string;
+      maxTokens?: number;
+      temperature?: number;
+      systemPrompt?: string;
+    } = {}
+  ): AsyncGenerator<{choices: {delta: {content?: string}}[], done: boolean}> {
+    const {
+      model = this.config.defaultModel,
+      maxTokens = 4000,
+      temperature = 0.7,
+      systemPrompt = "You are a helpful AI assistant that generates card game content and interprets card effects.",
+    } = options;
+
+    try {
+      console.log(`[LLMClient] Creating stream for ${model} with ${prompt.length} chars prompt`);
+      
+      // Use native fetch for more control over the SSE stream
+      const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${this.config.apiKey || process.env.OPENROUTER_API_KEY}`,
+          'Content-Type': 'application/json',
+          'HTTP-Referer': this.config.httpReferer || '',
+          'X-Title': this.config.xTitle || '',
+        },
+        body: JSON.stringify({
+          model,
+          messages: [
+            {
+              role: 'system',
+              content: systemPrompt,
+            },
+            {
+              role: 'user',
+              content: prompt,
+            },
+          ],
+          max_tokens: maxTokens,
+          temperature,
+          stream: true,
+        }),
+      });
+      
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error(`[LLMClient] API Error: ${response.status} ${response.statusText}`);
+        console.error(`[LLMClient] Error response: ${errorText}`);
+        throw new Error(`API Error: ${response.status} ${response.statusText} - ${errorText}`);
+      }
+      
+      console.log(`[LLMClient] Stream response received with status ${response.status}`);
+      
+      if (!response.body) {
+        throw new Error('Response body is not readable');
+      }
+      
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = '';
+      
+      try {
+        while (true) {
+          const { done, value } = await reader.read();
+          
+          if (done) {
+            console.log(`[LLMClient] Stream reader completed`);
+            yield { choices: [{ delta: { content: '' }}], done: true };
+            break;
+          }
+          
+          // Decode and buffer the chunk
+          const chunk = decoder.decode(value, { stream: true });
+          buffer += chunk;
+          
+          // Process complete lines from buffer
+          let lineEnd;
+          while ((lineEnd = buffer.indexOf('\n')) !== -1) {
+            const line = buffer.slice(0, lineEnd).trim();
+            buffer = buffer.slice(lineEnd + 1);
+            
+            // Skip comments from SSE
+            if (line.startsWith(':')) {
+              continue;
+            }
+            
+            if (line.startsWith('data: ')) {
+              const data = line.slice(6);
+              
+              // Check for stream completion marker
+              if (data === '[DONE]') {
+                console.log(`[LLMClient] Received [DONE] marker`);
+                yield { choices: [{ delta: { content: '' }}], done: true };
+                break;
+              }
+              
+              try {
+                const parsed = JSON.parse(data);
+                const content = parsed.choices?.[0]?.delta?.content || '';
+                
+                // Yield the content in a format compatible with our existing code
+                yield {
+                  choices: [{ delta: { content }}],
+                  done: false
+                };
+              } catch (e) {
+                console.warn(`[LLMClient] Error parsing SSE data: ${e instanceof Error ? e.message : e}`);
+                console.warn(`[LLMClient] Problematic data: ${data}`);
+                // Continue processing other chunks
+              }
+            }
+          }
+        }
+      } catch (streamError) {
+        console.error(`[LLMClient] Error reading stream: ${streamError instanceof Error ? streamError.message : streamError}`);
+        reader.cancel();
+        throw streamError;
+      }
+    } catch (error: any) {
+      console.error('[LLMClient] Error creating stream:', error);
+      throw this.normalizeError(error);
+    }
+  }
+  
+  /**
+   * Send a streaming completion request to the LLM API
+   * Returns an async generator that can be used with for-await-of
+   */
+  public async *completeStream(
+    prompt: string,
+    options: {
+      model?: string;
+      maxTokens?: number;
+      temperature?: number;
+      systemPrompt?: string;
+      onError?: (error: Error) => void;
+    } = {}
+  ): AsyncGenerator<string, LLMResponse, unknown> {
+    const {
+      model = this.config.defaultModel,
+      maxTokens = 4000,
+      temperature = 0.7,
+      systemPrompt = "You are a helpful AI assistant that generates card game content and interprets card effects.",
+      onError
+    } = options;
+    
+    try {
+      // Create the streaming request
+      const stream = await this.openai.chat.completions.create({
+        model,
+        messages: [
+          {
+            role: 'system',
+            content: systemPrompt,
+          },
+          {
+            role: 'user',
+            content: prompt,
+          },
+        ],
+        max_tokens: maxTokens,
+        temperature,
+        stream: true,
+      });
+      
+      let fullContent = '';
+      let promptTokens = 0;
+      let completionTokens = 0;
+      
+      // Process the stream
+      for await (const chunk of stream) {
+        const content = chunk.choices[0]?.delta?.content || '';
+        fullContent += content;
+        
+        // Update token counts if available
+        if (chunk.usage) {
+          promptTokens = chunk.usage.prompt_tokens;
+          completionTokens = chunk.usage.completion_tokens;
+        }
+        
+        // Yield the content chunk
+        yield content;
+      }
+      
+      // Return the full response when stream is complete
+      return {
+        content: fullContent,
+        model,
+        promptTokens,
+        completionTokens,
+        totalTokens: promptTokens + completionTokens,
+      };
+    } catch (error: any) {
+      const normalizedError = this.normalizeError(error);
+      if (onError) {
+        onError(normalizedError);
+      }
+      throw normalizedError;
     }
   }
 
@@ -188,23 +420,37 @@ export class LLMClient {
     let status: number | undefined = undefined;
     let message = error.message || 'Unknown error occurred';
 
-    if (error.response?.status) {
-      status = error.response.status;
-      message = error.response.data?.error?.message || message;
+    try {
+      if (error.response?.status) {
+        status = error.response.status;
+        message = error.response.data?.error?.message || message;
 
-      if (status === 429) {
-        type = 'rate_limit';
-        message = 'Rate limit exceeded';
-      } else if (status === 401 || status === 403) {
-        type = 'auth';
-        message = 'Authentication error';
-      } else if (status && status >= 500) {
-        type = 'server';
-        message = 'Server error';
-      } else if (status && status >= 400) {
-        type = 'client';
-        message = error.message || 'Client error';
+        if (status === 429) {
+          type = 'rate_limit';
+          message = 'Rate limit exceeded';
+        } else if (status === 401 || status === 403) {
+          type = 'auth';
+          message = 'Authentication error';
+        } else if (status && status >= 500) {
+          type = 'server';
+          message = 'Server error';
+        } else if (status && status >= 400) {
+          type = 'client';
+          message = error.message || 'Client error';
+        }
       }
+
+      // Handle JSON parsing errors or unexpected response format
+      if (message.includes('Unexpected token') || 
+          message.includes('JSON') || 
+          message.includes('Cannot read property') ||
+          message.includes('Cannot read properties')) {
+        type = 'server';
+        message = `Invalid response format from LLM API: ${message}`;
+      }
+    } catch (e) {
+      // If we get an error while trying to normalize an error, just return a generic error
+      return new LLMAPIError(`Error normalizing error: ${e instanceof Error ? e.message : 'Unknown error'}`, 'unknown');
     }
 
     return new LLMAPIError(message, type, status);

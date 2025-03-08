@@ -5,6 +5,8 @@ import { Server } from 'socket.io';
 import dotenv from 'dotenv';
 import apiRoutes from './routes/api';
 import llmApiRoutes from './routes/llm-api';
+import { Socket } from 'socket.io';
+import { GameAction } from './types';
 
 // Load environment variables
 dotenv.config();
@@ -77,25 +79,31 @@ io.on('connection', (socket) => {
     try {
       console.log(`[Socket.IO] Received ${action.type} action for game ${gameId}`);
       
-      // Process the action using the game engine - now async
-      const gameEngine = require('./game-engine');
-      const result = await gameEngine.processAction(gameId, action);
-      
-      if (!result.session) {
-        console.error(`[Socket.IO] Error processing action: ${result.error}`);
-        socket.emit('error', { 
-          message: result.error || 'Failed to process action' 
+      // Check if this is a card play action with streaming enabled
+      if (action.type === 'PLAY_CARD' && action.payload?.streamResponse === true) {
+        // Handle streaming card play
+        await handleStreamingCardPlay(socket, gameId, action);
+      } else {
+        // Process the action normally using the game engine
+        const gameEngine = require('./game-engine');
+        const result = await gameEngine.processAction(gameId, action);
+        
+        if (!result.session) {
+          console.error(`[Socket.IO] Error processing action: ${result.error}`);
+          socket.emit('error', { 
+            message: result.error || 'Failed to process action' 
+          });
+          return;
+        }
+        
+        console.log(`[Socket.IO] Action processed successfully, broadcasting update`);
+        
+        // Broadcast the updated game state to all clients in the room
+        io.to(gameId).emit('game-state-update', { 
+          gameState: result.session.gameState,
+          action: action
         });
-        return;
       }
-      
-      console.log(`[Socket.IO] Action processed successfully, broadcasting update`);
-      
-      // Broadcast the updated game state to all clients in the room
-      io.to(gameId).emit('game-state-update', { 
-        gameState: result.session.gameState,
-        action: action
-      });
     } catch (error) {
       console.error(`[Socket.IO] Error processing action:`, error);
       socket.emit('error', { 
@@ -212,6 +220,189 @@ io.on('connection', (socket) => {
     }
   });
 });
+
+// Helper function to handle streaming card play
+async function handleStreamingCardPlay(socket: Socket, gameId: string, action: GameAction) {
+  try {
+    console.log(`[Socket.IO] Handling streaming card play for game ${gameId}`);
+    console.log(`[Socket.IO] Action details:`, JSON.stringify({
+      type: action.type,
+      playerId: action.playerId,
+      payload: action.payload,
+      id: action.id
+    }));
+    
+    // Get the session first to validate the action
+    const gameEngine = require('./game-engine');
+    const { gameSessionManager } = gameEngine;
+    const session = gameSessionManager.getSession(gameId);
+    
+    if (!session) {
+      console.error(`[Socket.IO] Game session ${gameId} not found`);
+      socket.emit('error', { message: 'Game session not found' });
+      return;
+    }
+    
+    // Get card and player information from the action
+    const { cardId, playerId, targetId } = action.payload;
+    const card = session.gameState.players[playerId]?.hand?.find(c => c.id === cardId);
+    
+    if (!card) {
+      console.error(`[Socket.IO] Card ${cardId} not found in player ${playerId}'s hand`);
+      socket.emit('error', { message: 'Card not found in player hand' });
+      return;
+    }
+    
+    console.log(`[Socket.IO] Playing card "${card.name}" (${cardId}) for player ${playerId}`);
+    
+    // Send the on_play_description immediately if available
+    if (card.on_play_description) {
+      // Process any placeholders in the description
+      let description = card.on_play_description;
+      description = description.replace(/\[player\]/g, session.gameState.players[playerId]?.name || 'You');
+      description = description.replace(/\[opponent\]/g, 
+        Object.values(session.gameState.players).find(p => p.id !== playerId)?.name || 'opponent');
+      
+      console.log(`[Socket.IO] Sending immediate on_play_description: "${description}"`);
+      
+      // Emit the immediate description
+      io.to(gameId).emit('llm-stream-chunk', {
+        type: 'on-play-description',
+        content: description,
+        cardId,
+        playerId
+      });
+    }
+    
+    // Import LLM service to create the stream
+    const { llmService } = require('./game-engine/llm-service');
+    
+    console.log(`[Socket.IO] Creating card effects stream for card ${cardId}`);
+    
+    // Create the stream
+    const stream = await llmService.createCardEffectsStream(
+      card,
+      playerId,
+      session.gameState,
+      gameId,
+      targetId
+    );
+    
+    console.log(`[Socket.IO] Stream created successfully, emitting stream-start event`);
+    
+    // Start the streaming event
+    io.to(gameId).emit('llm-stream-start', {
+      cardId,
+      playerId,
+      timestamp: Date.now()
+    });
+    
+    let chunkCount = 0;
+    let totalContent = '';
+    
+    // Stream chunks to the client
+    try {
+      console.log(`[Socket.IO] Beginning to process stream chunks`);
+      
+      for await (const chunk of stream) {
+        // Safely check for content and log each chunk for debugging
+        console.log(`[Socket.IO] Stream chunk received:`, JSON.stringify(chunk));
+        
+        const content = chunk?.choices?.[0]?.delta?.content || '';
+        totalContent += content;
+        chunkCount++;
+        
+        if (content) {
+          console.log(`[Socket.IO] Emitting content: "${content.substring(0, 50)}${content.length > 50 ? '...' : ''}"`);
+          io.to(gameId).emit('llm-stream-chunk', {
+            type: 'content',
+            content,
+            cardId,
+            playerId
+          });
+        }
+        
+        // Check if the stream is done
+        if (chunk?.done) {
+          console.log(`[Socket.IO] Received done: true in chunk`);
+        }
+        
+        // Log every 10th chunk to avoid flooding logs
+        if (chunkCount % 10 === 0) {
+          console.log(`[Socket.IO] Processed ${chunkCount} chunks so far`);
+        }
+      }
+      
+      console.log(`[Socket.IO] Stream completed with ${chunkCount} total chunks`);
+      console.log(`[Socket.IO] Final content length: ${totalContent.length} characters`);
+      
+      // If we received no content at all, log a warning
+      if (totalContent.length === 0) {
+        console.warn(`[Socket.IO] Warning: Stream produced no content`);
+      }
+    } catch (streamError) {
+      console.error(`[Socket.IO] Error streaming chunks:`, streamError);
+      console.error(`[Socket.IO] Error details:`, streamError instanceof Error ? {
+        message: streamError.message,
+        name: streamError.name,
+        stack: streamError.stack
+      } : streamError);
+      
+      io.to(gameId).emit('llm-stream-error', {
+        message: streamError instanceof Error ? streamError.message : 'Unknown streaming error',
+        cardId,
+        playerId
+      });
+    }
+    
+    // Signal end of stream
+    console.log(`[Socket.IO] Emitting stream-end event`);
+    io.to(gameId).emit('llm-stream-end', {
+      cardId,
+      playerId,
+      timestamp: Date.now()
+    });
+    
+    // Now process the card play action normally to update the game state
+    console.log(`[Socket.IO] Stream completed, processing card play action normally`);
+    const result = await gameEngine.processAction(gameId, action);
+    
+    if (!result.session) {
+      console.error(`[Socket.IO] Error processing action: ${result.error}`);
+      socket.emit('error', { 
+        message: result.error || 'Failed to process action' 
+      });
+      return;
+    }
+    
+    console.log(`[Socket.IO] Card play processed successfully, broadcasting game state update`);
+    
+    // Broadcast the final game state update
+    io.to(gameId).emit('game-state-update', { 
+      gameState: result.session.gameState,
+      action: action
+    });
+    
+  } catch (error) {
+    console.error(`[Socket.IO] Error in streaming card play:`, error);
+    console.error(`[Socket.IO] Error details:`, error instanceof Error ? {
+      message: error.message,
+      name: error.name,
+      stack: error.stack
+    } : error);
+    
+    socket.emit('error', { 
+      message: error instanceof Error ? error.message : 'Unknown error in streaming card play'
+    });
+    
+    // Signal stream error to client
+    io.to(gameId).emit('llm-stream-error', {
+      message: error instanceof Error ? error.message : 'Unknown error in streaming',
+      cardId: action.payload?.cardId,
+      playerId: action.payload?.playerId
+    });
+  }
+}
 
 // Start the server
 const PORT = process.env.PORT || 5000;

@@ -58,6 +58,8 @@ export interface GameState {
   winner: string | null;
   isMultiplayer: boolean;
   lastNarrative?: string; // Narrative description of the last action
+  cardNarrative?: string; // The overall narrative for the card played
+  effectNarrations?: string[]; // Individual narrations for each effect
 }
 
 /**
@@ -89,6 +91,7 @@ export interface QueuedEffect {
   duration?: number;
   timestamp: number; // For ordering and replay
   actionId: string;  // ID of the action that generated this effect
+  narration?: string; // Narrative description of this specific effect
 }
 
 /**

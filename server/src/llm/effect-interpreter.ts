@@ -43,6 +43,7 @@ export type StateChangeAction = {
   duration?: number;
   timing?: 'immediate' | 'turn-start' | 'turn-end' | 'on-attack' | 'on-damaged';
   reasoning: string;
+  narration: string; // Descriptive narration of this effect for the game log
 };
 
 interface CardInterpretationResponse {
@@ -60,6 +61,15 @@ interface CostCacheEntry {
     reason: string;
   };
   timestamp: number;
+}
+
+// Type for streaming events
+export interface EffectInterpretationStreamEvent {
+  type: 'narrative' | 'effect' | 'error';
+  content: string;
+  complete?: boolean;
+  effectIndex?: number;
+  effectData?: Partial<StateChangeAction>;
 }
 
 export class EffectInterpreter {
@@ -280,7 +290,7 @@ Response format:
     return result.canPlay;
   }
 
-  private getEffectInterpretationSystemPrompt(): string {
+  public getEffectInterpretationSystemPrompt(): string {
     return `You are a card game interpreter that translates card effects into specific game actions. 
     
 Your role is to:
@@ -293,7 +303,7 @@ Consider all relevant status effects when determining outcomes.
 All responses must be in valid JSON format.`;
   }
 
-  private createEffectInterpretationPrompt(context: CardPlayContext): string {
+  public createEffectInterpretationPrompt(context: CardPlayContext): string {
     const { card, playerId, targetId, gameState } = context;
     const player = gameState.players[playerId];
     const opponent = Object.values(gameState.players).find(p => p.id !== playerId);
@@ -419,13 +429,15 @@ EXAMPLE 1 - Basic attack vs block:
       "action": "REMOVE_BLOCK",
       "target": "opponent",
       "value": 5,
-      "reasoning": "Sword attack removes all remaining block"
+      "reasoning": "Sword attack removes all remaining block",
+      "narration": "The heavy blade shatters the opponent's magical barrier with a thunderous crash."
     },
     {
       "action": "REMOVE_HP",
       "target": "opponent",
       "value": 3,
-      "reasoning": "Attack does 8 total damage, 5 was absorbed by block, 3 damages HP"
+      "reasoning": "Attack does 8 total damage, 5 was absorbed by block, 3 damages HP",
+      "narration": "The sword continues its arc, slicing through armor and drawing blood."
     }
   ]
 }
@@ -438,13 +450,15 @@ EXAMPLE 2 - Status effect interaction:
       "action": "REMOVE_HP",
       "target": "opponent",
       "value": 12,
-      "reasoning": "8 base damage + 50% bonus (4) from Soaked status effect"
+      "reasoning": "8 base damage + 50% bonus (4) from Soaked status effect",
+      "narration": "The lightning bolt crackles and intensifies as it hits the water-soaked opponent, causing extra damage."
     },
     {
       "action": "REMOVE_STATUS_EFFECT",
       "target": "opponent",
       "statusName": "Soaked",
-      "reasoning": "Lightning evaporates the water, removing Soaked status"
+      "reasoning": "Lightning evaporates the water, removing Soaked status",
+      "narration": "Steam rises from the opponent's body as the electricity instantly evaporates the water."
     },
     {
       "action": "ADD_STATUS_EFFECT",
@@ -453,13 +467,22 @@ EXAMPLE 2 - Status effect interaction:
       "statusDescription": "Skip next action due to electrical shock",
       "duration": 1,
       "timing": "immediate",
-      "reasoning": "Lightning temporarily paralyzes the target"
+      "reasoning": "Lightning temporarily paralyzes the target",
+      "narration": "The opponent's muscles seize up as electrical current courses through their body."
     }
   ]
 }
   
 IMPORTANT: Make sure to include a state change action for EVERY card effect, both base and special
-For each state change action, include a 'narration' property that describes the effect in natural language.`;
+For each state change action, include a 'narration' property that describes the effect in natural language.
+
+The narration for each state change action should:
+1. Be vivid and evocative, describing the visual appearance of the effect
+2. Use sensory language (sights, sounds, sensations) to make the effect feel immersive
+3. Include context-aware details that reference the current game state
+4. Be 1-2 sentences long (not too verbose, but descriptive)
+5. Have a consistent tone that matches the card's theme and name
+6. Avoid generic statements and instead paint a picture of what's happening`;
 
     return prompt;
   }
@@ -516,6 +539,9 @@ For each state change action, include a 'narration' property that describes the 
         }
         if (!change.reasoning) {
           throw new Error(`State change at index ${index} missing required 'reasoning' field`);
+        }
+        if (!change.narration) {
+          throw new Error(`State change at index ${index} missing required 'narration' field`);
         }
       });
 
