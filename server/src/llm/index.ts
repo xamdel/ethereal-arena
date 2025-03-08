@@ -19,6 +19,51 @@ export async function generateCards(count: number = 5, playerContext?: any) {
   });
 }
 
+// Convenience function to calculate energy cost for a card (used when highlighting a card)
+export async function calculateCardEnergyCost(card: any, playerId: string, gameState: any): Promise<{
+  canPlay: boolean;
+  energyCost: number;
+  reason: string;
+  fromCache?: boolean;
+}> {
+  console.log(`[LLM] calculateCardEnergyCost called for card: ${card.name} (${card.id})`);
+  console.log(`[LLM] Player ID: ${playerId}`);
+  
+  const { effectInterpreter } = await import('./effect-interpreter');
+  
+  try {
+    console.log(`[LLM] Calling effectInterpreter.calculateCardEnergyCost...`);
+    const result = await effectInterpreter().calculateCardEnergyCost({
+      card,
+      playerId,
+      gameState
+    });
+    
+    console.log(`[LLM] Cost calculation completed successfully`);
+    console.log(`[LLM] Energy cost: ${result.energyCost} (${result.canPlay ? 'can play' : 'cannot play'})`);
+    console.log(`[LLM] Reason: ${result.reason}`);
+    console.log(`[LLM] From cache: ${result.fromCache ? 'Yes' : 'No'}`);
+    
+    return result;
+  } catch (error) {
+    console.error(`[LLM] Error in calculateCardEnergyCost: ${(error as Error).message}`);
+    // Return a fallback value based on the card's base cost
+    return {
+      canPlay: gameState.players[playerId].energy >= card.cost,
+      energyCost: card.cost,
+      reason: "Error calculating energy cost, using base cost"
+    };
+  }
+}
+
+// Clear cost cache for a player (call this when game state changes)
+export async function clearCardEnergyCostCache(playerId: string): Promise<void> {
+  console.log(`[LLM] Clearing card energy cost cache for player: ${playerId}`);
+  
+  const { effectInterpreter } = await import('./effect-interpreter');
+  effectInterpreter().clearCostCacheForPlayer(playerId);
+}
+
 // Convenience function to interpret a card's effects
 export async function interpretCardEffects(card: any, playerId: string, gameState: any): Promise<{
   stateChanges: StateChangeAction[];

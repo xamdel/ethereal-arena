@@ -2,6 +2,7 @@
 
 import { Card } from '@/types';
 import { useState } from 'react';
+import { useGame } from '@/context';
 
 interface CardDisplayProps {
   card: Card;
@@ -19,6 +20,15 @@ export function CardDisplay({
   showDetail = false,
 }: CardDisplayProps) {
   const [isHovered, setIsHovered] = useState(false);
+  
+  // Use the game context
+  const { getCardEnergyCost } = useGame();
+  
+  // Get energy cost calculation if available
+  const energyCost = getCardEnergyCost(card.id);
+  const displayCost = energyCost?.energyCost !== undefined ? energyCost.energyCost : card.cost;
+  const hasReducedCost = energyCost?.energyCost !== undefined && energyCost.energyCost < card.cost;
+  const hasIncreasedCost = energyCost?.energyCost !== undefined && energyCost.energyCost > card.cost;
   
   // Determine card style based on props
   const cardClasses = `
@@ -48,13 +58,16 @@ export function CardDisplay({
     w-8 
     h-8 
     rounded-full 
-    bg-blue-600 
+    ${hasReducedCost ? 'bg-green-600' : hasIncreasedCost ? 'bg-red-600' : 'bg-blue-600'} 
     flex 
     items-center 
     justify-center 
     text-lg 
     font-bold 
     shadow-md
+    transition-colors
+    duration-300
+    ${hasReducedCost || hasIncreasedCost ? 'animate-pulse' : ''}
   `;
 
   return (
@@ -66,8 +79,15 @@ export function CardDisplay({
     >
       {/* Energy cost display */}
       <div className={energyCostClasses}>
-        {card.cost}
+        {displayCost}
       </div>
+      
+      {/* Show energy cost tooltip if cost was modified */}
+      {(hasReducedCost || hasIncreasedCost) && isHovered && (
+        <div className="absolute top-2 left-12 bg-black bg-opacity-80 p-2 rounded text-xs z-10 max-w-[200px]">
+          {energyCost?.reason || (hasReducedCost ? 'Cost reduced!' : 'Cost increased!')}
+        </div>
+      )}
       
       {/* Card name */}
       <h3 className="text-center text-lg font-bold mt-2 mb-1">{card.name}</h3>

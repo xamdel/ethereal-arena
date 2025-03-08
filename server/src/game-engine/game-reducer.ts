@@ -39,6 +39,10 @@ export const gameReducer = async (state: GameState, action: GameAction): Promise
   // Add the action to history
   newState.actionHistory = [...newState.actionHistory, action];
   
+  // NOTE: We don't clear the energy cost cache here anymore
+  // It's now handled in the handlePlayCard method after retrieving the cost
+  // but before calling the effect interpreter
+  
   // Process the action based on its type
   try {
     switch (action.type) {
@@ -135,9 +139,6 @@ const handlePlayCard = async (state: GameState, action: GameAction): Promise<Gam
   console.log(`[Game Reducer] Wildcard effect: ${playedCard.wildcard_effect}`);
 
   try {
-    // Use the LLM service to interpret the card effects
-    const { llmService } = await import('./llm-service');
-
     // Convert game state to format for LLM
     const llmGameState = {
       players: Object.entries(newState.players).reduce((acc, [id, player]) => {
@@ -156,9 +157,40 @@ const handlePlayCard = async (state: GameState, action: GameAction): Promise<Gam
       phase: newState.phase
     };
     
+    // 1. First, calculate energy cost (should use cached value if available)
+    const { calculateCardEnergyCost } = await import('../llm');
+    const costResult = await calculateCardEnergyCost(playedCard, action.playerId, llmGameState);
+    
+    // Verify player can afford this card
+    if (!costResult.canPlay) {
+      console.log(`[Game Reducer] Player can't afford to play card ${playedCard.name} - requires ${costResult.energyCost} energy`);
+      return state; // Return original state without changes
+    }
+    
+    // 2. Apply the energy cost immediately
+    let stateWithEnergyCost = newState;
+    const energyCostEffect = {
+      id: crypto.randomUUID(),
+      type: 'energy',
+      value: -costResult.energyCost, // Negative for cost
+      source: action.playerId,
+      target: action.playerId,
+      card: cardId,
+      timing: 'immediate',
+      actionId: action.id
+    };
+    
+    console.log(`[Game Reducer] Applying energy cost: ${costResult.energyCost} for player ${action.playerId}`);
+    stateWithEnergyCost = stateHelpers.addEffectToQueue(stateWithEnergyCost, energyCostEffect);
+    stateWithEnergyCost = stateHelpers.processAllEffects(stateWithEnergyCost);
+    
+    // 3. After applying the cost, clear the cache
+    const { llmService } = await import('./llm-service');
+    await llmService.clearCardEnergyCostCache(action.playerId);
+    
     console.log(`[Game Reducer] Calling LLM service for card effect interpretation...`);
     
-    // Interpret the card effects using the LLM service
+    // 4. NOW interpret the card effects using the LLM service
     const interpretation = await llmService.interpretCardEffects(
       playedCard,
       action.playerId,
@@ -168,19 +200,25 @@ const handlePlayCard = async (state: GameState, action: GameAction): Promise<Gam
     
     // Check if the card can be played according to the LLM
     if (!interpretation.canPlayCard) {
-      console.log(`[Game Reducer] LLM determined that card ${playedCard.name} cannot be played with current energy/status effects`);
+      console.log(`[Game Reducer] LLM determined that card ${playedCard.name} cannot be played with current status effects`);
       return state; // Return original state without changes
     }
     
     console.log(`[Game Reducer] Received interpretation with ${interpretation.stateChanges.length} state changes`, interpretation.stateChanges);
     
     // Process the interpreted effects
-    let stateWithEffects = newState;
+    let stateWithEffects = stateWithEnergyCost;
     
     // Convert StateChangeActions to QueuedEffects and add to the queue
     interpretation.stateChanges.forEach(stateChange => {
+      // Skip any REMOVE_ENERGY actions since we already handled energy cost
+      if (stateChange.action === 'REMOVE_ENERGY') {
+        console.log(`[Game Reducer] Skipping REMOVE_ENERGY from effect interpreter as cost was already applied`);
+        return;
+      }
+      
       // Map the new state change format to game engine effects
-      const queuedEffect = mapStateChangeToQueuedEffect(stateChange, action.playerId, newState, cardId, action.id);
+      const queuedEffect = mapStateChangeToQueuedEffect(stateChange, action.playerId, stateWithEnergyCost, cardId, action.id);
       
       if (queuedEffect) {
         console.log(`[Game Reducer] Adding effect to queue: ${queuedEffect.type} targeting ${queuedEffect.target}`);
@@ -223,8 +261,60 @@ const handlePlayCard = async (state: GameState, action: GameAction): Promise<Gam
     // Fallback: Just process the base effects directly
     let stateWithEffects = newState;
     
+    // Apply energy cost in fallback mode
+    try {
+      const { calculateCardEnergyCost } = await import('../llm');
+      const llmGameState = {
+        players: Object.entries(newState.players).reduce((acc, [id, player]) => {
+          acc[id] = {
+            id,
+            hp: player.hp,
+            maxHp: player.maxHp,
+            block: player.block,
+            energy: player.energy,
+            statusEffects: player.statusEffects || []
+          };
+          return acc;
+        }, {} as any),
+        activePlayerId: newState.activePlayerId,
+        turn: newState.turnNumber,
+        phase: newState.phase
+      };
+      
+      const costResult = await calculateCardEnergyCost(playedCard, action.playerId, llmGameState);
+      
+      // Apply the energy cost
+      stateWithEffects = stateHelpers.addEffectToQueue(stateWithEffects, {
+        id: crypto.randomUUID(),
+        type: 'energy',
+        value: -costResult.energyCost, // Negative for cost
+        source: action.playerId,
+        target: action.playerId,
+        card: cardId,
+        timing: 'immediate',
+        actionId: action.id
+      });
+      
+      stateWithEffects = stateHelpers.processAllEffects(stateWithEffects);
+    } catch (costError) {
+      console.error(`[Game Reducer] Error applying energy cost in fallback mode:`, costError);
+      // If calculating cost fails, apply base cost
+      stateWithEffects = stateHelpers.addEffectToQueue(stateWithEffects, {
+        id: crypto.randomUUID(),
+        type: 'energy',
+        value: -playedCard.cost, // Negative for cost
+        source: action.playerId,
+        target: action.playerId,
+        card: cardId,
+        timing: 'immediate',
+        actionId: action.id
+      });
+      
+      stateWithEffects = stateHelpers.processAllEffects(stateWithEffects);
+    }
+    
+    // Process base effects
     if (playedCard.base_effects && Array.isArray(playedCard.base_effects)) {
-      // Process base effects
       playedCard.base_effects.forEach(effect => {
         const effectTarget = effect.target === 'self' ? action.playerId : targetPlayerId;
         
@@ -235,6 +325,7 @@ const handlePlayCard = async (state: GameState, action: GameAction): Promise<Gam
         
         // Add the effect to the queue
         stateWithEffects = stateHelpers.addEffectToQueue(stateWithEffects, {
+          id: crypto.randomUUID(),
           type: effect.effect_type,
           value: effect.value,
           source: action.playerId,

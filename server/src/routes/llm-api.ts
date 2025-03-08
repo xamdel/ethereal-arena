@@ -5,6 +5,7 @@ import { effectInterpreter } from '../llm/effect-interpreter';
 import { llmClient } from '../llm/api-client';
 import * as gameEngine from '../game-engine';
 import { llmService } from '../game-engine/llm-service';
+import { calculateCardEnergyCost } from '../llm';
 
 // @ts-ignore - Suppress Express router type errors for the whole file
 // This is a known issue with Express types in TypeScript
@@ -171,6 +172,107 @@ router.post('/games/:gameId/narrative', async (req, res) => {
     console.error('Error generating narrative:', error);
     res.status(500).json({ 
       error: 'Failed to generate narrative',
+      details: error instanceof Error ? error.message : 'Unknown error'
+    });
+  }
+});
+
+/**
+ * Clear card energy cost cache for a player
+ * POST /api/llm/games/:gameId/players/:playerId/clear-cost-cache
+ */
+router.post('/games/:gameId/players/:playerId/clear-cost-cache', async (req, res) => {
+  try {
+    const { gameId, playerId } = req.params;
+    
+    if (!gameId || !playerId) {
+      return res.status(400).json({ error: 'Game ID and player ID are required' });
+    }
+    
+    // Get game session
+    const gameSession = gameEngine.getGameSession(gameId);
+    
+    if (!gameSession) {
+      return res.status(404).json({ error: 'Game not found' });
+    }
+    
+    // Clear the cost cache for the player
+    await llmService.clearCardEnergyCostCache(playerId);
+    
+    // Return success
+    res.json({
+      gameId,
+      playerId,
+      message: 'Card energy cost cache cleared successfully'
+    });
+  } catch (error) {
+    console.error('Error clearing card energy cost cache:', error);
+    res.status(500).json({ 
+      error: 'Failed to clear card energy cost cache',
+      details: error instanceof Error ? error.message : 'Unknown error'
+    });
+  }
+});
+
+/**
+ * Calculate card energy cost
+ * POST /api/llm/games/:gameId/cards/:cardId/cost
+ */
+router.post('/games/:gameId/cards/:cardId/cost', async (req, res) => {
+  try {
+    const { gameId, cardId } = req.params;
+    const { playerId } = req.body;
+    
+    if (!gameId || !playerId || !cardId) {
+      return res.status(400).json({ error: 'Game ID, player ID and card ID are required' });
+    }
+    
+    // Get game session
+    const gameSession = gameEngine.getGameSession(gameId);
+    
+    if (!gameSession) {
+      return res.status(404).json({ error: 'Game not found' });
+    }
+    
+    // Find the card in the player's hand
+    const player = gameSession.gameState.players[playerId];
+    if (!player) {
+      return res.status(404).json({ error: 'Player not found in game' });
+    }
+    
+    const card = player.hand.find(c => c.id === cardId);
+    if (!card) {
+      return res.status(404).json({ error: 'Card not found in player hand' });
+    }
+    
+    // Convert game state to format needed by LLM service
+    const llmGameState = {
+      players: gameSession.gameState.players,
+      activePlayerId: gameSession.gameState.activePlayerId,
+      turn: gameSession.gameState.turnNumber,
+      phase: gameSession.gameState.phase
+    };
+    
+    // Calculate card energy cost
+    const costResult = await calculateCardEnergyCost(
+      card,
+      playerId,
+      llmGameState
+    );
+    
+    // Return the cost calculation
+    res.json({
+      gameId,
+      playerId,
+      cardId,
+      canPlay: costResult.canPlay,
+      energyCost: costResult.energyCost,
+      reason: costResult.reason
+    });
+  } catch (error) {
+    console.error('Error calculating card energy cost:', error);
+    res.status(500).json({ 
+      error: 'Failed to calculate card energy cost',
       details: error instanceof Error ? error.message : 'Unknown error'
     });
   }

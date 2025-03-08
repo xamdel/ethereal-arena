@@ -149,3 +149,63 @@ export const startGame = async (
 
   return response.json();
 };
+
+/**
+ * Calculate card energy cost
+ * @param gameId Game identifier
+ * @param cardId Card identifier
+ * @param playerId Player identifier
+ */
+export const calculateCardEnergyCost = async (
+  gameId: string,
+  cardId: string,
+  playerId: string
+): Promise<{ 
+  canPlay: boolean; 
+  energyCost: number; 
+  reason: string;
+  fromCache?: boolean;
+}> => {
+  const response = await fetch(`${API_BASE_URL}/llm/games/${gameId}/cards/${cardId}/cost`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ playerId }),
+  });
+
+  if (!response.ok) {
+    const error = await response.json();
+    throw new Error(error.message || 'Failed to calculate card energy cost');
+  }
+
+  const result = await response.json();
+  return {
+    canPlay: result.canPlay,
+    energyCost: result.energyCost,
+    reason: result.reason,
+    fromCache: result.fromCache
+  };
+};
+
+/**
+ * Clear card energy cost cache for a player
+ * @param gameId Game identifier
+ * @param playerId Player identifier
+ */
+export const clearCardEnergyCostCache = async (
+  gameId: string,
+  playerId: string
+): Promise<void> => {
+  const response = await fetch(`${API_BASE_URL}/llm/games/${gameId}/players/${playerId}/clear-cost-cache`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+  });
+
+  if (!response.ok) {
+    const error = await response.json();
+    throw new Error(error.message || 'Failed to clear card energy cost cache');
+  }
+};

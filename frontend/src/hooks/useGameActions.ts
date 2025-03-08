@@ -9,7 +9,14 @@ import { v4 as uuidv4 } from 'uuid';
  * Provides functions to dispatch common game actions
  */
 export function useGameActions() {
-  const { gameState, dispatch, dispatchUI } = useGame();
+  const { 
+    gameState, 
+    dispatch, 
+    dispatchUI, 
+    calculateCardEnergyCost, 
+    clearCardEnergyCosts, 
+    getCardEnergyCost 
+  } = useGame();
 
   // Generate a unique action ID
   const generateActionId = (): string => {
@@ -163,6 +170,19 @@ export function useGameActions() {
       // Use the active player ID directly from the game state
       const playerID = gameState.activePlayerId || 'unknown';
       
+      // Get the cached energy cost calculation
+      const energyCost = getCardEnergyCost(cardId);
+      
+      // If we have a cached calculation and the card can't be played, show an error
+      if (energyCost && !energyCost.canPlay) {
+        console.log(`Cannot play card ${cardId}: ${energyCost.reason}`);
+        dispatchUI({ 
+          type: 'SET_ERROR', 
+          payload: { message: `Cannot play card: ${energyCost.reason}` } 
+        });
+        return;
+      }
+      
       const action: GameAction = {
         id: generateActionId(),
         type: ActionType.PLAY_CARD,
@@ -180,6 +200,9 @@ export function useGameActions() {
       await dispatch(action);
       
       console.log('Card played successfully');
+      
+      // Clear the energy cost cache since the state has changed
+      clearCardEnergyCosts();
       
       // Reset UI after the server response is processed
       dispatchUI({ type: 'RESET_UI' });
@@ -239,11 +262,18 @@ export function useGameActions() {
   };
 
   // Select a card from hand (UI action)
-  const selectCard = (cardId: string) => {
+  const selectCard = async (cardId: string) => {
     dispatchUI({
       type: 'SELECT_CARD',
       payload: { cardId }
     });
+    
+    // Calculate energy cost for the selected card
+    try {
+      await calculateCardEnergyCost(cardId);
+    } catch (error) {
+      console.error("Error calculating card energy cost:", error);
+    }
   };
 
   // Select a target player (UI action)

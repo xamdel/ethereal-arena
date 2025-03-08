@@ -30,6 +30,21 @@ export interface LLMGameState {
  */
 export class LLMService {
   /**
+   * Clear the energy cost cache for a player
+   * Should be called whenever game state changes (e.g., when a card is played)
+   */
+  async clearCardEnergyCostCache(playerId: string): Promise<void> {
+    console.log(`[LLMService] Clearing card energy cost cache for player ${playerId}`);
+    
+    try {
+      // Import dynamically to avoid circular dependencies
+      const { clearCardEnergyCostCache } = await import('../llm');
+      await clearCardEnergyCostCache(playerId);
+    } catch (error) {
+      console.error(`[LLMService] Error clearing card energy cost cache: ${(error as Error).message}`);
+    }
+  }
+  /**
    * Generate cards for a player
    */
   async generateCardsForPlayer(
@@ -76,8 +91,48 @@ export class LLMService {
   }
   
   /**
+   * Calculate energy cost for a card
+   * Used when a card is highlighted to pre-calculate if it can be played
+   */
+  async calculateCardEnergyCost(
+    card: Card,
+    playerId: string,
+    gameState: LLMGameState
+  ): Promise<{
+    canPlay: boolean;
+    energyCost: number;
+    reason: string;
+  }> {
+    console.log(`[LLMService] calculateCardEnergyCost called for card: ${card.name} (${card.id})`);
+    console.log(`[LLMService] Player ID: ${playerId}`);
+    
+    try {
+      // Import dynamically to avoid circular dependencies
+      const { calculateCardEnergyCost } = await import('../llm');
+      
+      // Calculate the energy cost
+      const result = await calculateCardEnergyCost(card, playerId, gameState);
+      
+      console.log(`[LLMService] Energy cost calculation completed successfully`);
+      console.log(`[LLMService] Energy cost: ${result.energyCost}, Can play: ${result.canPlay}`);
+      
+      return result;
+    } catch (error) {
+      console.error(`[LLMService] Error calculating card energy cost: ${(error as Error).message}`);
+      // Fallback to basic cost check
+      const player = gameState.players[playerId];
+      return {
+        canPlay: player.energy >= card.cost,
+        energyCost: card.cost,
+        reason: "Using base cost due to calculation error"
+      };
+    }
+  }
+  
+  /**
    * Interpret the effects of a played card
    * Now returns stateChanges array in the new format
+   * Note: Energy costs are now handled separately in the game reducer
    */
   async interpretCardEffects(
     card: Card,

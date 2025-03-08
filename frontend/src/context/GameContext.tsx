@@ -28,6 +28,15 @@ interface UIState {
   showCardDetail: string | null;
   isConnected: boolean;
   lastSyncTime: number;
+  // Store energy cost calculations for highlighted cards
+  cardEnergyCosts: {
+    [cardId: string]: {
+      canPlay: boolean;
+      energyCost: number;
+      reason: string;
+      calculatedAt: number;
+    }
+  };
 }
 
 const initialUIState: UIState = {
@@ -37,7 +46,8 @@ const initialUIState: UIState = {
   errorMessage: null,
   showCardDetail: null,
   isConnected: false,
-  lastSyncTime: 0
+  lastSyncTime: 0,
+  cardEnergyCosts: {}
 };
 
 // Create reducer for core game state
@@ -274,6 +284,26 @@ function uiStateReducer(state: UIState, action: any): UIState {
         lastSyncTime: Date.now()
       };
     
+    case 'UPDATE_CARD_ENERGY_COST':
+      return {
+        ...state,
+        cardEnergyCosts: {
+          ...state.cardEnergyCosts,
+          [action.payload.cardId]: {
+            canPlay: action.payload.canPlay,
+            energyCost: action.payload.energyCost,
+            reason: action.payload.reason,
+            calculatedAt: Date.now()
+          }
+        }
+      };
+    
+    case 'CLEAR_CARD_ENERGY_COSTS':
+      return {
+        ...state,
+        cardEnergyCosts: {}
+      };
+    
     case 'RESET_UI':
       return {
         ...initialUIState,
@@ -295,6 +325,9 @@ interface GameContextType {
   getCurrentPlayer: () => any | null;
   getOpponent: () => any | null;
   canPlayCard: (cardId: string) => boolean;
+  calculateCardEnergyCost: (cardId: string) => Promise<void>;
+  clearCardEnergyCosts: () => void;
+  getCardEnergyCost: (cardId: string) => { canPlay: boolean; energyCost: number; reason: string } | null;
 }
 
 // Create the context
@@ -424,8 +457,97 @@ export function GameProvider({ children }: { children: ReactNode }) {
       return false;
     }
     
-    // Check if the player has enough energy to play the card
+    // Check if we have a cached energy cost calculation
+    const energyCost = getCardEnergyCost(cardId);
+    if (energyCost) {
+      return energyCost.canPlay;
+    }
+    
+    // Fallback to basic cost check if no calculation is available
     return player.energy >= card.cost;
+  };
+  
+  // Get cached energy cost calculation for a card
+  const getCardEnergyCost = (cardId: string) => {
+    const cachedCost = uiState.cardEnergyCosts[cardId];
+    if (!cachedCost) {
+      return null;
+    }
+    
+    // Return cached calculation
+    return {
+      canPlay: cachedCost.canPlay,
+      energyCost: cachedCost.energyCost,
+      reason: cachedCost.reason
+    };
+  };
+  
+  // Calculate energy cost for a card (calls LLM API)
+  const calculateCardEnergyCost = async (cardId: string) => {
+    // Get player data
+    const player = getCurrentPlayer();
+    if (!player || !gameState.id) {
+      return;
+    }
+    
+    // Find the card
+    const card = player.hand.find(c => c.id === cardId);
+    if (!card) {
+      return;
+    }
+    
+    try {
+      // Import the API module
+      const { calculateCardEnergyCost } = await import('@/services/api');
+      
+      // Call the API to calculate cost
+      console.log(`Calculating energy cost for card ${cardId}...`);
+      const result = await calculateCardEnergyCost(
+        gameState.id,
+        cardId,
+        player.id
+      );
+      
+      console.log(`Energy cost calculation result:`, result);
+      
+      // Update UI state with the calculation
+      dispatchUI({
+        type: 'UPDATE_CARD_ENERGY_COST',
+        payload: {
+          cardId,
+          canPlay: result.canPlay,
+          energyCost: result.energyCost,
+          reason: result.reason
+        }
+      });
+    } catch (error) {
+      console.error("Error calculating card energy cost:", error);
+      // Use fallback if calculation fails
+      dispatchUI({
+        type: 'UPDATE_CARD_ENERGY_COST',
+        payload: {
+          cardId,
+          canPlay: player.energy >= card.cost,
+          energyCost: card.cost,
+          reason: "Using base cost (calculation failed)"
+        }
+      });
+    }
+  };
+  
+  // Clear all cached energy cost calculations
+  const clearCardEnergyCosts = async () => {
+    dispatchUI({ type: 'CLEAR_CARD_ENERGY_COSTS' });
+    
+    // Also clear on the server if a game is active
+    if (gameState.id && getCurrentPlayer()) {
+      try {
+        const { clearCardEnergyCostCache } = await import('@/services/api');
+        await clearCardEnergyCostCache(gameState.id, getCurrentPlayer().id);
+      } catch (error) {
+        console.error("Error clearing card energy cost cache:", error);
+      }
+    }
   };
   
   // State synchronization skeleton
@@ -441,6 +563,13 @@ export function GameProvider({ children }: { children: ReactNode }) {
     }
   }, [gameState.isMultiplayer]);
   
+  // Clear cache when game state changes
+  useEffect(() => {
+    // When an action is played, clear the energy cost cache
+    clearCardEnergyCosts();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [gameState.actionHistory.length]);
+
   return (
     <GameContext.Provider
       value={{
@@ -451,7 +580,10 @@ export function GameProvider({ children }: { children: ReactNode }) {
         isCurrentPlayerActive,
         getCurrentPlayer,
         getOpponent,
-        canPlayCard
+        canPlayCard,
+        calculateCardEnergyCost,
+        clearCardEnergyCosts,
+        getCardEnergyCost
       }}
     >
       {children}

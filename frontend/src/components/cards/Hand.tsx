@@ -20,7 +20,7 @@ export function Hand() {
   }
   
   // Handle card click
-  const handleCardClick = (cardId: string) => {
+  const handleCardClick = async (cardId: string) => {
     if (uiState.isProcessing) return;
     
     // If card is already selected, play it
@@ -28,9 +28,9 @@ export function Hand() {
       playCard(cardId);
       setSelectedCardId(null);
     } else {
-      // Otherwise select it
+      // Otherwise select it and calculate energy cost
       setSelectedCardId(cardId);
-      selectCard(cardId);
+      await selectCard(cardId);
     }
   };
   
