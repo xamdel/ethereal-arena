@@ -13,6 +13,26 @@ export interface LLMResponse {
   totalTokens: number;
 }
 
+interface OpenRouterResponse {
+  id: string;
+  object: string;
+  created: number;
+  model: string;
+  choices: {
+    index: number;
+    message: {
+      role: string;
+      content: string;
+    };
+    finish_reason: string;
+  }[];
+  usage?: {
+    prompt_tokens: number;
+    completion_tokens: number;
+    total_tokens: number;
+  };
+}
+
 // Error type for LLM API calls
 export class LLMAPIError extends Error {
   public readonly status?: number;
@@ -40,16 +60,17 @@ interface LLMClientConfig {
 
 // Default configuration
 const DEFAULT_CONFIG: LLMClientConfig = {
-  defaultModel: 'google/gemini-2.0-pro-exp-02-05:free',
+  defaultModel: 'google/gemini-2.0-flash-001',
   maxRetries: 3,
   retryDelay: 1000,
-  // httpReferer: 'https://etherealarena.com',
-  // xTitle: 'Ethereal Arena', 
+  httpReferer: 'https://etherealarena.com', // Uncommented for proper attribution
+  xTitle: 'Ethereal Arena', 
 };
 
 export class LLMClient {
   private openai: OpenAI;
   private config: LLMClientConfig;
+  private apiKey: string;
 
   constructor(config: Partial<LLMClientConfig> = {}) {
     // Merge provided config with defaults
@@ -59,15 +80,15 @@ export class LLMClient {
     };
 
     // Use provided API key or fall back to environment variable
-    const apiKey = this.config.apiKey || process.env.OPENROUTER_API_KEY;
+    this.apiKey = this.config.apiKey || process.env.OPENROUTER_API_KEY || '';
 
-    if (!apiKey) {
+    if (!this.apiKey) {
       throw new Error('OPENROUTER_API_KEY is required. Provide it in .env or via constructor options.');
     }
 
     this.openai = new OpenAI({
       baseURL: 'https://openrouter.ai/api/v1',
-      apiKey,
+      apiKey: this.apiKey,
       defaultHeaders: {
         'HTTP-Referer': this.config.httpReferer,
         'X-Title': this.config.xTitle,
@@ -77,6 +98,7 @@ export class LLMClient {
 
   /**
    * Send a completion request to the LLM API
+   * Uses native fetch instead of OpenAI SDK for better control and compatibility
    */
   public async complete(
     prompt: string,
@@ -102,7 +124,8 @@ export class LLMClient {
         try {
           console.log(`[LLMClient] Sending request to ${model} with ${prompt.length} chars prompt`);
           
-          const completion = await this.openai.chat.completions.create({
+          // Create the request payload
+          const payload = {
             model,
             messages: [
               {
@@ -116,19 +139,43 @@ export class LLMClient {
             ],
             max_tokens: maxTokens,
             temperature,
-          });
-
-          // Log the raw response for debugging
-          console.log(`[LLMClient] Raw response:`, JSON.stringify({
-            id: completion.id,
-            model: completion.model,
-            object: completion.object,
-            created: completion.created,
-            choices_length: completion.choices?.length,
-            has_usage: !!completion.usage,
-            first_choice_finish_reason: completion.choices?.[0]?.finish_reason,
-            has_message_content: !!completion.choices?.[0]?.message?.content,
+          };
+          
+          // Log the request payload for debugging
+          console.log(`[LLMClient] Request payload:`, JSON.stringify({
+            model,
+            messages_count: payload.messages.length,
+            system_message_length: systemPrompt.length,
+            user_message_length: prompt.length,
+            max_tokens: maxTokens,
+            temperature,
           }));
+          
+          // Use native fetch instead of the OpenAI SDK
+          const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+            method: 'POST',
+            headers: {
+              'Authorization': `Bearer ${this.apiKey}`,
+              'Content-Type': 'application/json',
+              'HTTP-Referer': this.config.httpReferer || 'https://etherealarena.com',
+              'X-Title': this.config.xTitle || 'Ethereal Arena',
+            },
+            body: JSON.stringify(payload),
+          });
+          
+          // Check for HTTP errors
+          if (!response.ok) {
+            const errorText = await response.text();
+            console.error(`[LLMClient] API Error: ${response.status} ${response.statusText}`);
+            console.error(`[LLMClient] Error response: ${errorText}`);
+            throw new Error(`API Error: ${response.status} ${response.statusText} - ${errorText}`);
+          }
+          
+          // Parse the response
+          const completion = await response.json() as OpenRouterResponse;
+          
+          // Log the raw response for debugging
+          console.log(`[LLMClient] Raw response:`, JSON.stringify(completion));
           
           // Safety check for completion.choices
           if (!completion.choices || !Array.isArray(completion.choices) || completion.choices.length === 0) {
@@ -152,21 +199,26 @@ export class LLMClient {
           };
         } catch (error: any) {
           lastError = error;
+          console.error(`[LLMClient] Attempt ${attempt + 1} failed:`, error.message);
 
           // Determine if we should retry based on error type
           const shouldRetry = this.isRetryableError(error);
           if (!shouldRetry) {
+            console.log(`[LLMClient] Error not retryable, breaking retry loop`);
             break;
           }
 
           // Wait before retrying
           if (attempt < this.config.maxRetries - 1) {
-            await this.delay(this.config.retryDelay * Math.pow(2, attempt));
+            const delayTime = this.config.retryDelay * Math.pow(2, attempt);
+            console.log(`[LLMClient] Retrying after ${delayTime}ms...`);
+            await this.delay(delayTime);
           }
         }
       }
 
       // Handle the error if all retries failed
+      console.error(`[LLMClient] All ${this.config.maxRetries} retry attempts failed`);
       throw this.normalizeError(lastError);
     } catch (error: any) {
       throw this.normalizeError(error);
@@ -201,7 +253,7 @@ export class LLMClient {
       const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
         method: 'POST',
         headers: {
-          'Authorization': `Bearer ${this.config.apiKey || process.env.OPENROUTER_API_KEY}`,
+          'Authorization': `Bearer ${this.apiKey}`,
           'Content-Type': 'application/json',
           'HTTP-Referer': this.config.httpReferer || '',
           'X-Title': this.config.xTitle || '',

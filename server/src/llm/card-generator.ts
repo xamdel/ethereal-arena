@@ -50,55 +50,49 @@ export class CardGenerator {
    * Generate a batch of cards
    */
   public async generateCards(options: CardGenerationOptions = {}): Promise<Card[]> {
-    const {
-      temperature = 0.7,
-      count = 5,
-      theme = 'fantasy',
-      playerContext,
-      excludedEffects = [],
-      maxEnergyCost = 5
-    } = options;
+  const {
+    temperature = 0.7,
+    count = 5,
+    theme = 'fantasy',
+    playerContext,
+    excludedEffects = [],
+    maxEnergyCost = 5
+  } = options;
 
-    // Create the prompt for card generation
-    const prompt = this.createCardGenerationPrompt({
-      count,
-      theme,
-      playerContext,
-      excludedEffects,
-      maxEnergyCost
+  // Create the prompt for card generation
+  const prompt = this.createCardGenerationPrompt({
+    count,
+    theme,
+    playerContext,
+    excludedEffects,
+    maxEnergyCost
+  });
+
+  // Call the LLM with the prompt
+  console.log(`[CardGenerator] Calling LLM to generate ${count} cards with temperature ${temperature}`);
+  
+  try {
+    const response = await this.llmClient.complete(prompt, {
+      temperature,
+      systemPrompt: this.getCardGenerationSystemPrompt(),
     });
 
-    // Call the LLM with the prompt
-    console.log(`[CardGenerator] Calling LLM to generate ${count} cards with temperature ${temperature}`);
+    console.log(`[CardGenerator] LLM response received, content length: ${response.content?.length || 0}`);
     
-    try {
-      const response = await this.llmClient.complete(prompt, {
-        temperature,
-        systemPrompt: this.getCardGenerationSystemPrompt(),
-      });
-
-      console.log(`[CardGenerator] LLM response received, content length: ${response.content?.length || 0}`);
-      
-      if (!response.content) {
-        console.error(`[CardGenerator] Empty response from LLM`);
-        throw new Error('Empty response from LLM during card generation');
-      }
-      
-      // Parse the response to extract cards
-      console.log(`[CardGenerator] Parsing card response`);
-      const parsedCards = this.parseCardResponse(response.content);
-      
-      console.log(`[CardGenerator] Successfully parsed ${parsedCards.length} cards`);
-      
-      if (parsedCards.length === 0) {
-        console.error(`[CardGenerator] No cards parsed from LLM response`);
-        throw new Error('No cards could be parsed from LLM response');
-      }
-    } catch (error) {
-      console.error(`[CardGenerator] Error during card generation:`, error);
-      // Provide some fallback mock cards to prevent game failure
-      // console.log(`[CardGenerator] Returning fallback cards`);
-      // return this.generateFallbackCards(count);
+    if (!response.content) {
+      console.error(`[CardGenerator] Empty response from LLM`);
+      throw new Error('Empty response from LLM during card generation');
+    }
+    
+    // Parse the response to extract cards
+    console.log(`[CardGenerator] Parsing card response`);
+    const parsedCards = this.parseCardResponse(response.content);
+    
+    console.log(`[CardGenerator] Successfully parsed ${parsedCards.length} cards`);
+    
+    if (parsedCards.length === 0) {
+      console.error(`[CardGenerator] No cards parsed from LLM response`);
+      throw new Error('No cards could be parsed from LLM response');
     }
     
     // Add IDs and metadata to the cards
@@ -108,7 +102,16 @@ export class CardGenerator {
       createdAt: Date.now(),
       createdBy: 'llm'
     }));
+  } catch (error) {
+    console.error(`[CardGenerator] Error during card generation:`, error);
+    // Uncomment if you want to use fallback cards
+    // console.log(`[CardGenerator] Returning fallback cards`);
+    // return this.generateFallbackCards(count);
+    
+    // Re-throw the error to be handled by the caller
+    throw error;
   }
+}
 
   /**
    * Create the system prompt for card generation
