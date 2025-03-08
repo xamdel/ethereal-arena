@@ -99,21 +99,19 @@ export function CardDisplay({
         </span>
       </div>
       
-      {/* Card base effects */}
       <div className="text-xs mb-1">
-        {card.base_effects.map((effect, index) => (
-          <div key={index} className="mb-1">
-            <span className="font-bold">{effect.effect_type}: </span>
-            <span>{effect.value} ({effect.target})</span>
-          </div>
-        ))}
+        <span>{card.base_effects}</span>
       </div>
       
-      {/* Card wildcard effect - only show in detail mode or on hover */}
-      {(showDetail || isHovered) && (
-        <div className="text-xs italic mt-auto">
-          <span className="font-bold">Special: </span>
+      {card.wildcard_effect && (
+        <div className="text-xs mt-auto">
           {card.wildcard_effect}
+        </div>
+      )}
+
+      {card.flavor_text && (
+        <div className="text-xs italic mt-auto">
+          {card.flavor_text}
         </div>
       )}
     </div>

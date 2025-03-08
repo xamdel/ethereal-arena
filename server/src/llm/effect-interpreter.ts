@@ -198,13 +198,12 @@ CARD:
 - Name: ${card.name}
 - Base Cost: ${card.cost}
 - Description: ${card.description}
-- Effects: ${JSON.stringify(card.base_effects)}
-- Special Effects: ${card.wildcard_effect || 'None'}
+- Effects: ${card.base_effects}${card.wildcard_effect ? `. ${card.wildcard_effect}` : ''}
 
 PLAYER:
 - Available Energy: ${player.energy}
-- Status Effects: ${player.statusEffects.length > 0 ? 
-  player.statusEffects.map(effect => 
+- Status Effects: ${player.statusEffects.length > 0 ?
+  player.statusEffects.map(effect =>
     `${effect.name} (${effect.description})`
   ).join(', ') : 'None'}
 
@@ -459,7 +458,8 @@ EXAMPLE 2 - Status effect interaction:
   ]
 }
   
-IMPORTANT: Make sure to include a state change action for EVERY card effect, both base and special`;
+IMPORTANT: Make sure to include a state change action for EVERY card effect, both base and special
+For each state change action, include a 'narration' property that describes the effect in natural language.`;
 
     return prompt;
   }

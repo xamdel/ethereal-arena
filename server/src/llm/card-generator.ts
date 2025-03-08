@@ -30,14 +30,12 @@ interface RawCardResponse {
   cards: {
     name: string;
     cost: number;
-    base_effects: {
-      effect_type: string;
-      value: number;
-      target: 'opponent' | 'self';
-    }[];
+    base_effects: string;
     description: string;
-    wildcard_effect: string;
+    wildcard_effect?: string;
     art_prompt: string;
+    flavor_text?: string;
+    on_play_description?: string;
   }[];
 }
 
@@ -97,9 +95,11 @@ export class CardGenerator {
 Each card should have:
 1. A fantasy-themed name
 2. An energy cost (1-5)
-3. Base effects that are clear and specific (damage, block, draw, etc.)
-4. A wildcard effect that adds a unique twist but remains balanced
+3. Base effects that are clear and specific (e.g. Deal damage, Gain block)
+4. A wildcard effect that adds a unique twist but remains balanced (optional)
 5. A brief art prompt describing the card's visual appearance
+
+Card balance should be roughly 5 points of damage/block/healing per 1 point of energy, but wildcard effects should be taken into consideration, i.e. a 3-cost card should not both deal 15 damage AND have a powerful wildcard effect.
 
 All responses must be in valid JSON format.`;
   }
@@ -127,14 +127,16 @@ The game has these mechanics:
 For each card, provide:
 1. Name: A thematic fantasy name
 2. Cost: Energy cost from 1 to ${maxEnergyCost}
-3. Base Effects: Specific numerical effects (damage, block, draw, etc.)
-4. Description: A short flavor text
-5. Wildcard Effect: A unique twist that's creative but balanced
+3. Base Effects: A string describing the card's primary effects
+4. Description: A short flavor text describing the card
+5. Wildcard Effect: A unique twist that's creative but balanced (optional)
 6. Art Prompt: A brief visual description for the card
+7. On Play Description: A string describing what happens when the player begins playing the card
+8. Flavor Text: An additional short flavor text (optional - don't include every time)
 
 Guidelines:
 - Each card should be unique and fit the theme
-- Base effects should be clear and specific (e.g., "Deal 8 damage", "Gain 5 block")
+- Base effects should be clear and specific (e.g., "Deal 5 damage", "Gain 5 block")
 - Wildcard effects should add a unique twist but remain balanced
 - Most cards should cost 1-3 energy, with a few powerful 4-5 energy cards
 - Balance the distribution of offensive and defensive cards`;
@@ -170,23 +172,14 @@ Guidelines:
 {
   "cards": [
     {
-      "name": "Frost Nova",
-      "cost": 2,
-      "base_effects": [
-        {
-          "effect_type": "damage",
-          "value": 6,
-          "target": "opponent"
-        },
-        {
-          "effect_type": "block",
-          "value": 3,
-          "target": "self"
-        }
-      ],
-      "description": "The fury of winter in your hands.",
-      "wildcard_effect": "If the opponent has no Block, apply 1 Frozen status.",
-      "art_prompt": "A swirling blue crystal emitting frost particles and icy mist."
+      "name": "Arcane Bolt",
+      "cost": 1,
+      "base_effects": "Deal 5 damage to the opponent",
+      "description": "A simple but effective spell.",
+      "wildcard_effect": "If the opponent has less than 20 HP, deal 10 damage instead.",
+      "art_prompt": "A glowing blue bolt of energy hurtling towards the opponent.",
+      "on_play_description": "[player] gestures, and a bolt of arcane energy streaks towards [opponent].",
+      "flavor_text": "Magic is not always about complexity, sometimes simplicity is key."
     },
     ...more cards...
   ]
@@ -218,14 +211,12 @@ Guidelines:
         id: '', // Will be filled in by the caller
         name: card.name,
         cost: Math.max(0, Math.min(5, card.cost)), // Ensure cost is within valid range
-        base_effects: card.base_effects.map(effect => ({
-          effect_type: effect.effect_type,
-          value: effect.value,
-          target: effect.target
-        })),
+        base_effects: card.base_effects,
         description: card.description,
         wildcard_effect: card.wildcard_effect,
         art_prompt: card.art_prompt,
+        flavor_text: card.flavor_text,
+        on_play_description: card.on_play_description,
         createdAt: 0, // Will be filled in by the caller
         createdBy: '' // Will be filled in by the caller
       }));

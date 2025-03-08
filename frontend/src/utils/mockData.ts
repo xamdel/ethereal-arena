@@ -7,16 +7,12 @@ export const mockCards: Card[] = [
     id: uuidv4(),
     name: "Fireball",
     cost: 2,
-    base_effects: [
-      {
-        effect_type: "damage",
-        value: 6,
-        target: "opponent"
-      }
-    ],
+    base_effects: "Deal 6 damage to the opponent.",
     description: "A blazing orb of fire that deals damage to your opponent.",
     wildcard_effect: "Leaves a burn effect that deals 2 damage at the end of the turn.",
     art_prompt: "A blazing orb of fire floating above a mage's hand, ready to be unleashed.",
+    flavor_text: "Burn, baby, burn!",
+    on_play_description: "[player] casts a fireball at [opponent].",
     createdAt: Date.now() - 1000,
     createdBy: "system"
   },
@@ -24,16 +20,12 @@ export const mockCards: Card[] = [
     id: uuidv4(),
     name: "Healing Light",
     cost: 2,
-    base_effects: [
-      {
-        effect_type: "heal",
-        value: 4,
-        target: "self"
-      }
-    ],
+    base_effects: "Heal 4 health to self.",
     description: "A soothing light that restores health.",
     wildcard_effect: "Removes one negative status effect if any are present.",
     art_prompt: "A gentle beam of golden light descending from above, washing over a wounded figure.",
+    flavor_text: "Feel the warmth of the light.",
+    on_play_description: "[player] channels a healing light.",
     createdAt: Date.now() - 900,
     createdBy: "system"
   },
@@ -41,16 +33,12 @@ export const mockCards: Card[] = [
     id: uuidv4(),
     name: "Energy Surge",
     cost: 1,
-    base_effects: [
-      {
-        effect_type: "energy",
-        value: 2,
-        target: "self"
-      }
-    ],
+    base_effects: "Gain 2 energy.",
     description: "Harness raw energy to fuel your next moves.",
     wildcard_effect: "If your energy was at 0 when played, draw an additional card.",
     art_prompt: "Crackling blue energy swirling around a character, illuminating them with power.",
+    flavor_text: "Unlimited power!",
+    on_play_description: "[player] absorbs surrounding energy.",
     createdAt: Date.now() - 800,
     createdBy: "system"
   },
@@ -58,16 +46,12 @@ export const mockCards: Card[] = [
     id: uuidv4(),
     name: "Stone Shield",
     cost: 1,
-    base_effects: [
-      {
-        effect_type: "block",
-        value: 5,
-        target: "self"
-      }
-    ],
+    base_effects: "Gain 5 block.",
     description: "Summons a protective barrier of stone.",
     wildcard_effect: "If you already had block, gain 2 additional block.",
     art_prompt: "Rugged stone plates forming a protective shield around a character.",
+    flavor_text: "A bulwark against any assault.",
+    on_play_description: "[player] raises a stone shield.",
     createdAt: Date.now() - 700,
     createdBy: "system"
   },
@@ -75,16 +59,12 @@ export const mockCards: Card[] = [
     id: uuidv4(),
     name: "Lightning Strike",
     cost: 3,
-    base_effects: [
-      {
-        effect_type: "damage",
-        value: 10,
-        target: "opponent"
-      }
-    ],
+    base_effects: "Deal 10 damage to the opponent.",
     description: "Calls down a bolt of lightning on your opponent.",
     wildcard_effect: "Has a 20% chance to hit twice.",
     art_prompt: "A brilliant fork of lightning crashing down from storm clouds onto an opponent.",
+    flavor_text: "Feel the power of the storm!",
+    on_play_description: "[player] calls down lightning.",
     createdAt: Date.now() - 600,
     createdBy: "system"
   }

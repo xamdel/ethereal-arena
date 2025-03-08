@@ -10,14 +10,12 @@ export interface Card {
   id: string;
   name: string;
   cost: number;
-  base_effects: Array<{
-    effect_type: string;
-    value: number;
-    target: "opponent" | "self";
-  }>;
+  base_effects: string;
   description: string;
-  wildcard_effect: string;
+  wildcard_effect?: string;
   art_prompt: string;
+  flavor_text?: string;
+  on_play_description?: string;
   createdAt: number; // Timestamp for synchronization
   createdBy: string; // ID of LLM instance that generated this
 }

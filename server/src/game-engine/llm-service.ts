@@ -148,7 +148,7 @@ export class LLMService {
     console.log(`[LLMService] Player ID: ${playerId}, Target ID: ${targetId || 'not specified'}`);
     console.log(`[LLMService] Game state has ${Object.keys(gameState.players).length} players`);
     console.log(`[LLMService] Game turn: ${gameState.turn}, Phase: ${gameState.phase}`);
-    console.log(`[LLMService] Card base effects count: ${card.base_effects?.length || 0}`);
+    console.log(`[LLMService] Card base effects: ${card.base_effects}`);
     console.log(`[LLMService] Card has wildcard effect: ${!!card.wildcard_effect}`);
     
     try {

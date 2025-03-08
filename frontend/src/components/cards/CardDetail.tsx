@@ -47,19 +47,24 @@ export function CardDetail({ card, onClose }: CardDetailProps) {
         {/* Base effects section */}
         <div className="mb-4">
           <h3 className="text-lg font-bold mb-2 border-b border-blue-600 pb-1">Base Effects</h3>
-          {card.base_effects.map((effect, index) => (
-            <div key={index} className="mb-2">
-              <span className="font-bold">{effect.effect_type}: </span>
-              <span>{effect.value} ({effect.target})</span>
-            </div>
-          ))}
+          <p>{card.base_effects}</p>
         </div>
         
         {/* Wildcard effect section */}
-        <div className="mb-4">
-          <h3 className="text-lg font-bold mb-2 border-b border-blue-600 pb-1">Special Effect</h3>
-          <p className="italic">{card.wildcard_effect}</p>
-        </div>
+        {card.wildcard_effect && (
+          <div className="mb-4">
+            <h3 className="text-lg font-bold mb-2 border-b border-blue-600 pb-1">Special Effect</h3>
+            <p className="italic">{card.wildcard_effect}</p>
+          </div>
+        )}
+
+        {/* Flavor Text section */}
+        {card.flavor_text && (
+          <div className="mb-4">
+            <h3 className="text-lg font-bold mb-2 border-b border-blue-600 pb-1">Flavor Text</h3>
+            <p>{card.flavor_text}</p>
+          </div>
+        )}
         
         {/* Description section */}
         <div className="mb-8">

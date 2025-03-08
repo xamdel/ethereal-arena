@@ -135,8 +135,8 @@ const handlePlayCard = async (state: GameState, action: GameAction): Promise<Gam
   }
   
   console.log(`[Game Reducer] Playing card: ${playedCard.name} (${playedCard.id})`, playedCard);
-  console.log(`[Game Reducer] Base effects: ${JSON.stringify(playedCard.base_effects)}`);
-  console.log(`[Game Reducer] Wildcard effect: ${playedCard.wildcard_effect}`);
+  console.log(`[Game Reducer] Base effects: ${playedCard.base_effects}`);
+  console.log(`[Game Reducer] Wildcard effect: ${playedCard.wildcard_effect ? playedCard.wildcard_effect : 'None'}`);
 
   try {
     // Convert game state to format for LLM
@@ -176,7 +176,7 @@ const handlePlayCard = async (state: GameState, action: GameAction): Promise<Gam
       source: action.playerId,
       target: action.playerId,
       card: cardId,
-      timing: 'immediate',
+      timing: "immediate",
       actionId: action.id
     };
     
@@ -312,31 +312,21 @@ const handlePlayCard = async (state: GameState, action: GameAction): Promise<Gam
       
       stateWithEffects = stateHelpers.processAllEffects(stateWithEffects);
     }
-    
-    // Process base effects
-    if (playedCard.base_effects && Array.isArray(playedCard.base_effects)) {
-      playedCard.base_effects.forEach(effect => {
-        const effectTarget = effect.target === 'self' ? action.playerId : targetPlayerId;
-        
-        if (!effectTarget) {
-          console.warn('No target for effect, skipping');
-          return;
-        }
-        
-        // Add the effect to the queue
-        stateWithEffects = stateHelpers.addEffectToQueue(stateWithEffects, {
-          id: crypto.randomUUID(),
-          type: effect.effect_type,
-          value: effect.value,
-          source: action.playerId,
-          target: effectTarget,
-          card: cardId,
-          timing: 'immediate',
-          actionId: action.id
-        });
+    // Process base effects (fallback - string format)
+    if (playedCard.base_effects) {
+      // Add the effect to the queue
+      stateWithEffects = stateHelpers.addEffectToQueue(stateWithEffects, {
+        id: crypto.randomUUID(),
+        type: 'effect', // Generic effect type
+        value: 0, // No specific value
+        source: action.playerId,
+        target: action.playerId, // Default target
+        card: cardId,
+        timing: 'immediate',
+        actionId: action.id
       });
     }
-    
+
     // Process immediate effects
     stateWithEffects = stateHelpers.processAllEffects(stateWithEffects);
     
