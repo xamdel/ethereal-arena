@@ -8,6 +8,9 @@ import llmApiRoutes from './routes/llm-api';
 import { Socket } from 'socket.io';
 import { GameAction } from './types';
 
+// Import specific methods to avoid circular dependencies
+import { getGameSession, processAction, startGame } from './game-engine/game-session-manager';
+
 // Load environment variables
 dotenv.config();
 
@@ -84,9 +87,8 @@ io.on('connection', (socket) => {
         // Handle streaming card play
         await handleStreamingCardPlay(socket, gameId, action);
       } else {
-        // Process the action normally using the game engine
-        const gameEngine = require('./game-engine');
-        const result = await gameEngine.processAction(gameId, action);
+        // Process the action using the imported processAction function
+        const result = await processAction(gameId, action);
         
         if (!result.session) {
           console.error(`[Socket.IO] Error processing action: ${result.error}`);
@@ -124,9 +126,8 @@ io.on('connection', (socket) => {
     try {
       console.log(`[Socket.IO] Starting game ${gameId}`);
       
-      // Start the game using the game engine - now async
-      const gameEngine = require('./game-engine');
-      const startedSession = await gameEngine.startGame(gameId);
+      // Start the game using the imported startGame function
+      const startedSession = await startGame(gameId);
       
       if (!startedSession) {
         console.error(`[Socket.IO] Failed to start game ${gameId}`);
@@ -161,7 +162,6 @@ io.on('connection', (socket) => {
       console.log(`[Socket.IO] Selecting cards for player ${playerId} in game ${gameId}`);
       
       // Create a select cards action
-      const gameEngine = require('./game-engine');
       const { v4: uuidv4 } = require('uuid');
       
       const selectAction = {
@@ -176,7 +176,7 @@ io.on('connection', (socket) => {
       
       // Process the action - now async
       console.log(`[Socket.IO] Processing select cards action`);
-      const result = await gameEngine.processAction(gameId, selectAction);
+      const result = await processAction(gameId, selectAction);
       
       if (!result.session) {
         console.error(`[Socket.IO] Error selecting cards: ${result.error}`);
@@ -233,9 +233,7 @@ async function handleStreamingCardPlay(socket: Socket, gameId: string, action: G
     }));
     
     // Get the session first to validate the action
-    const gameEngine = require('./game-engine');
-    const { gameSessionManager } = gameEngine;
-    const session = gameSessionManager.getSession(gameId);
+    const session = getGameSession(gameId);
     
     if (!session) {
       console.error(`[Socket.IO] Game session ${gameId} not found`);
@@ -245,12 +243,77 @@ async function handleStreamingCardPlay(socket: Socket, gameId: string, action: G
     
     // Get card and player information from the action
     const { cardId, playerId, targetId } = action.payload;
-    const card = session.gameState.players[playerId]?.hand?.find(c => c.id === cardId);
     
-    if (!card) {
-      console.error(`[Socket.IO] Card ${cardId} not found in player ${playerId}'s hand`);
-      socket.emit('error', { message: 'Card not found in player hand' });
+    // Debug game state
+    console.log(`[Socket.IO] Game state players:`, Object.keys(session.gameState.players));
+    console.log(`[Socket.IO] Looking for player ID: ${playerId}`);
+    
+    const player = session.gameState.players[playerId];
+    if (!player) {
+      console.error(`[Socket.IO] Player ${playerId} not found in game session`);
+      console.log(`[Socket.IO] Available players:`, Object.keys(session.gameState.players));
+      socket.emit('error', { message: 'Player not found in game session' });
       return;
+    }
+    
+    console.log(`[Socket.IO] Player ${playerId} found, hand size: ${player.hand?.length || 0}`);
+    
+    if (!player.hand) {
+      console.error(`[Socket.IO] Player ${playerId} has no hand array`);
+      socket.emit('error', { message: 'Player hand not initialized' });
+      return;
+    }
+    
+    // Debug cards in hand
+    console.log(`[Socket.IO] Cards in hand:`, player.hand.map(c => ({ id: c.id, name: c.name })));
+    console.log(`[Socket.IO] Looking for card ID: ${cardId}`);
+    
+    // Try to find the card in the player's hand
+    let card = player.hand.find(c => c.id === cardId);
+    
+    // If the card isn't in the hand, it might have been removed already by another API call
+    if (!card) {
+      console.warn(`[Socket.IO] Card ${cardId} not found in player's hand. Checking discard pile...`);
+      
+      // Check if it's in the discard pile (already played)
+      if (player.discardPile && Array.isArray(player.discardPile)) {
+        card = player.discardPile.find(c => c.id === cardId);
+        
+        if (card) {
+          console.log(`[Socket.IO] Card ${cardId} found in discard pile. Using it for streaming.`);
+        }
+      }
+      
+      // If still not found, check deck as fallback
+      if (!card && player.deck && Array.isArray(player.deck)) {
+        card = player.deck.find(c => c.id === cardId);
+        
+        if (card) {
+          console.log(`[Socket.IO] Card ${cardId} found in deck. Using it for streaming.`);
+        }
+      }
+      
+      // If still not found, try to get more info about the error
+      if (!card) {
+        console.error(`[Socket.IO] Card ${cardId} not found in any of player ${playerId}'s card collections`);
+        console.log(`[Socket.IO] Collections available:`, {
+          hand: player.hand?.length || 0,
+          discard: player.discardPile?.length || 0,
+          deck: player.deck?.length || 0
+        });
+        
+        // Instead of failing completely, let's create a dummy card with the ID so streaming can continue
+        console.log(`[Socket.IO] Creating dummy card for streaming`);
+        card = {
+          id: cardId,
+          name: "Unknown Card",
+          description: "This card's details are missing",
+          type: "Unknown",
+          cost: 0,
+          rarity: "common",
+          base_effects: "Unknown effects"
+        };
+      }
     }
     
     console.log(`[Socket.IO] Playing card "${card.name}" (${cardId}) for player ${playerId}`);
@@ -288,7 +351,13 @@ async function handleStreamingCardPlay(socket: Socket, gameId: string, action: G
       targetId
     );
     
-    console.log(`[Socket.IO] Stream created successfully, emitting stream-start event`);
+    console.log(`[Socket.IO] Stream created successfully:`, {
+      type: typeof stream,
+      isAsyncIterable: Symbol.asyncIterator in Object(stream),
+      methods: Object.getOwnPropertyNames(Object(stream))
+    });
+    
+    console.log(`[Socket.IO] Emitting stream-start event`);
     
     // Start the streaming event
     io.to(gameId).emit('llm-stream-start', {
@@ -308,12 +377,28 @@ async function handleStreamingCardPlay(socket: Socket, gameId: string, action: G
         // Safely check for content and log each chunk for debugging
         console.log(`[Socket.IO] Stream chunk received:`, JSON.stringify(chunk));
         
-        const content = chunk?.choices?.[0]?.delta?.content || '';
-        totalContent += content;
         chunkCount++;
         
-        if (content) {
-          console.log(`[Socket.IO] Emitting content: "${content.substring(0, 50)}${content.length > 50 ? '...' : ''}"`);
+        // Handle the new EffectInterpretationStreamEvent format
+        if (chunk.type && chunk.content) {
+          // Add content to total for logging
+          totalContent += chunk.content;
+          
+          // Forward the chunk directly to the client with type
+          console.log(`[Socket.IO] Emitting ${chunk.type} chunk: "${chunk.content.substring(0, 50)}${chunk.content.length > 50 ? '...' : ''}"`);
+          io.to(gameId).emit('llm-stream-chunk', {
+            type: chunk.type,
+            content: chunk.content,
+            cardId,
+            playerId,
+            complete: chunk.complete
+          });
+        } else if (chunk?.choices?.[0]?.delta?.content) {
+          // Handle old format (raw LLM stream) for backward compatibility
+          const content = chunk.choices[0].delta.content;
+          totalContent += content;
+          
+          console.log(`[Socket.IO] Emitting content from raw LLM stream: "${content.substring(0, 50)}${content.length > 50 ? '...' : ''}"`);
           io.to(gameId).emit('llm-stream-chunk', {
             type: 'content',
             content,
@@ -323,8 +408,8 @@ async function handleStreamingCardPlay(socket: Socket, gameId: string, action: G
         }
         
         // Check if the stream is done
-        if (chunk?.done) {
-          console.log(`[Socket.IO] Received done: true in chunk`);
+        if (chunk.complete || chunk?.done) {
+          console.log(`[Socket.IO] Received done/complete flag in chunk`);
         }
         
         // Log every 10th chunk to avoid flooding logs
@@ -365,7 +450,7 @@ async function handleStreamingCardPlay(socket: Socket, gameId: string, action: G
     
     // Now process the card play action normally to update the game state
     console.log(`[Socket.IO] Stream completed, processing card play action normally`);
-    const result = await gameEngine.processAction(gameId, action);
+    const result = await processAction(gameId, action);
     
     if (!result.session) {
       console.error(`[Socket.IO] Error processing action: ${result.error}`);

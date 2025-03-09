@@ -418,15 +418,66 @@ export function GameProvider({ children }: { children: ReactNode }) {
       
       console.log('Dispatching action:', action.type);
       
-      // Send all actions to the server for processing
-      if (action.type !== ActionType.GAME_INIT) {
-        dispatchUI({ type: 'SET_PROCESSING', payload: { isProcessing: true } });
+      // Initialize actions - we'll handle game initialization locally
+      if (action.type === ActionType.GAME_INIT) {
+        dispatch(action);
+        return;
+      }
+      
+      // For all other actions, show processing state and send to server
+      dispatchUI({ type: 'SET_PROCESSING', payload: { isProcessing: true } });
+      
+      try {
+        // IMPORTANT: Skip HTTP API completely for any streaming action
+        // and use only socket for those to avoid double-processing
+        const useSocketForAction = action.type === ActionType.PLAY_CARD && action.payload?.streamResponse === true;
         
-        try {
-          // Import and use the API service
-          const { submitAction } = await import('@/services/api');
+        if (useSocketForAction) {
+          // Import and use socket service for streaming card plays
+          const { sendGameAction, joinGameRoom, initSocket } = await import('@/services/socket');
           
-          console.log(`Sending action ${action.type} to server for game ${action.gameId}`);
+          console.log(`[SOCKET MODE] Sending action ${action.type} via WebSocket for game ${action.gameId}`);
+          console.log(`[SOCKET MODE] Action has streamResponse flag: ${action.payload?.streamResponse}`);
+          
+          // Initialize socket connection and ensure we're connected
+          const socket = initSocket();
+          if (!socket.connected) {
+            console.log('[SOCKET MODE] Socket not connected. Attempting connection...');
+            socket.connect();
+          }
+          
+          // Wait briefly to ensure connection is established
+          await new Promise(resolve => setTimeout(resolve, 100));
+          
+          // Log socket connection status
+          console.log(`[SOCKET MODE] Socket connected: ${socket.connected}`);
+          console.log(`[SOCKET MODE] Socket ID: ${socket.id}`);
+          
+          // Ensure we're in the game room
+          joinGameRoom(action.gameId);
+          
+          // Send the action via socket and add detailed debugging
+          console.log(`[SOCKET MODE] Sending action details:`, {
+            type: action.type,
+            playerId: action.playerId,
+            gameId: action.gameId,
+            payload: action.payload
+          });
+          
+          // Send the action to the server
+          sendGameAction(action.gameId, action);
+          
+          console.log(`[SOCKET MODE] Action sent. Waiting for stream events...`);
+          
+          // For socket actions, we don't turn off processing here
+          // The stream end handler will turn it off when streaming completes
+          
+          // We don't call dispatch() because socket handlers will update state
+          return; // Important: Return immediately to avoid HTTP API call
+        } else {
+          // For non-streaming actions, use the HTTP API
+          console.log(`[HTTP MODE] Sending action ${action.type} via HTTP API for game ${action.gameId}`);
+          const { submitAction } = await import('@/services/api');
           const result = await submitAction(action.gameId, action);
           
           console.log(`Server processed action, updated state received:`, result);
@@ -449,22 +500,22 @@ export function GameProvider({ children }: { children: ReactNode }) {
             payload: result.gameState,
             validated: true
           });
-          
-        } catch (error) {
-          console.error("Error communicating with server:", error);
-          dispatchUI({ 
-            type: 'SET_ERROR', 
-            payload: { message: 'Failed to communicate with game server. Trying local mode.' }
-          });
-          
-          // Fall back to local processing
-          dispatch(action);
-        } finally {
+        }
+      } catch (error) {
+        console.error("Error communicating with server:", error);
+        dispatchUI({ 
+          type: 'SET_ERROR', 
+          payload: { message: 'Failed to communicate with game server. Trying local mode.' }
+        });
+        
+        // Fall back to local processing
+        dispatch(action);
+      } finally {
+        // If it's a streaming action, don't turn off processing flag here -
+        // The socket events will handle it
+        if (!(action.type === ActionType.PLAY_CARD && action.payload?.streamResponse === true)) {
           dispatchUI({ type: 'SET_PROCESSING', payload: { isProcessing: false } });
         }
-      } else {
-        // Game init actions are processed locally
-        dispatch(action);
       }
     } catch (error) {
       console.error("Error in dispatchAction:", error);

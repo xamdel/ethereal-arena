@@ -200,34 +200,42 @@ export class LLMService {
     console.log(`[LLMService] Game state has ${Object.keys(gameState.players).length} players`);
     
     try {
-      // Import dynamically to avoid circular dependencies
-      const { effectInterpreter } = await import('../llm');
-      const { llmClient } = await import('../llm/api-client');
+      // Import the streamCardEffects function 
+      const { streamCardEffects } = await import('../llm');
       
-      // Create the effect interpretation prompt
-      const context = {
-        card,
-        playerId,
-        targetId,
-        gameState: {
-          ...gameState,
-          targetId
-        }
+      // Create the gameState with targetId
+      const enhancedGameState = {
+        ...gameState,
+        targetId
       };
       
-      // Get the prompt for effect interpretation
-      const prompt = effectInterpreter().createEffectInterpretationPrompt(context);
+      console.log(`[LLMService] Creating effect interpretation stream`);
       
-      console.log(`[LLMService] Generated effect interpretation prompt of ${prompt.length} characters`);
+      // Use the streamCardEffects function instead of directly using api-client
+      const stream = streamCardEffects(card, playerId, enhancedGameState);
       
-      // Create a stream and return it
-      console.log(`[LLMService] Creating LLM stream for effect interpretation`);
-      const stream = await llmClient.createStream(prompt, {
-        temperature: 0.3,
-        systemPrompt: effectInterpreter().getEffectInterpretationSystemPrompt(),
+      // Add extra debugging
+      console.log(`[LLMService] Stream object created:`, {
+        type: typeof stream,
+        isAsyncIterable: Symbol.asyncIterator in Object(stream),
+        constructor: stream.constructor?.name || 'unknown',
+        methods: Object.getOwnPropertyNames(Object.getPrototypeOf(stream) || {})
       });
       
-      console.log(`[LLMService] Stream created successfully, type:`, typeof stream);
+      // Try to get the first chunk to validate the stream
+      try {
+        console.log('[LLMService] Attempting to peek at first stream item');
+        const streamIterator = stream[Symbol.asyncIterator]();
+        const firstChunkPromise = streamIterator.next();
+        
+        // Don't actually await it, just confirm it's a promise
+        console.log('[LLMService] Iterator.next() returned:', 
+          firstChunkPromise instanceof Promise ? 'Promise (good)' : 'Not a Promise (bad)');
+      } catch (error) {
+        console.error('[LLMService] Error peeking at stream:', error);
+      }
+      
+      console.log(`[LLMService] Stream created successfully`);
       
       return stream;
     } catch (error) {

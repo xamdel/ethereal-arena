@@ -1,7 +1,7 @@
 // Export types and classes
 export { LLMClient, LLMResponse, LLMAPIError } from './api-client';
 export { CardGenerator } from './card-generator';
-export { EffectInterpreter, StateChangeAction } from './effect-interpreter';
+export { EffectInterpreter, StateChangeAction, EffectInterpretationStreamEvent } from './effect-interpreter';
 
 // Export singleton instances
 import { llmClient } from './api-client';
@@ -94,5 +94,39 @@ export async function interpretCardEffects(card: any, playerId: string, gameStat
   } catch (error) {
     console.error(`[LLM] Error in interpretCardEffects: ${(error as Error).message}`);
     throw error;
+  }
+}
+
+/**
+ * Stream the interpretation of card effects
+ * Returns an async generator that yields interpretation events
+ */
+export async function* streamCardEffects(card: any, playerId: string, gameState: any): AsyncGenerator<EffectInterpretationStreamEvent, void, unknown> {
+  console.log(`[LLM] streamCardEffects called for card: ${card.name} (${card.id})`);
+  console.log(`[LLM] Player ID: ${playerId}`);
+  console.log(`[LLM] Game state contains ${Object.keys(gameState.players).length} players`);
+  console.log(`[LLM] Target ID included in game state: ${gameState.targetId || 'none'}`);
+  
+  const { effectInterpreter } = await import('./effect-interpreter');
+  
+  try {
+    console.log(`[LLM] Calling effectInterpreter.interpretCardEffectsStreaming...`);
+    
+    yield* effectInterpreter().interpretCardEffectsStreaming({
+      card,
+      playerId,
+      targetId: gameState.targetId,
+      gameState
+    });
+    
+  } catch (error) {
+    console.error(`[LLM] Error in streamCardEffects: ${(error as Error).message}`);
+    
+    // Yield an error event
+    yield {
+      type: 'error',
+      content: `Error streaming card effects: ${(error as Error).message}`,
+      complete: true
+    };
   }
 }

@@ -39,18 +39,22 @@ export function useGameSync() {
     
     // Initialize socket connection
     const socket = socketService.initSocket();
-    console.log('Connecting to game server...');
+    console.log('Connecting to game server via WebSocket...');
+    
+    // Try to connect and join room immediately 
+    socketService.joinGameRoom(gameState.id);
     
     // Handle connection change
     const handleConnect = () => {
-      console.log('Connected to game server');
+      console.log('✅ Connected to game server via WebSocket');
       setIsConnected(true);
       dispatchUI({ 
         type: 'SET_CONNECTION', 
         payload: { isConnected: true } 
       });
       
-      // Join the game room
+      // Re-join the game room on reconnect
+      console.log(`Joining game room: ${gameState.id}`);
       socketService.joinGameRoom(gameState.id!);
     };
     
@@ -66,7 +70,8 @@ export function useGameSync() {
     // Handle game state updates
     const handleGameStateUpdate = (data: { gameState: GameState, action?: GameAction }) => {
       console.log('Received game state update:', data);
-      setLastSyncTime(Date.now());
+      const updateTime = Date.now();
+      setLastSyncTime(updateTime);
       
       dispatch({
         type: 'SET_GAME_STATE',
@@ -74,9 +79,18 @@ export function useGameSync() {
       });
       
       // If this update was from a card play and we have streaming,
-      // mark streaming as complete
-      if (data.action?.type === 'PLAY_CARD' && streamingState.isStreaming && 
+      // mark streaming as complete and log timing info
+      if (data.action?.type === 'PLAY_CARD' && 
           data.action.payload?.cardId === streamingState.activeCardId) {
+        
+        // Log latency measurements for the complete game state update
+        if (streamStartTimeRef.current > 0) {
+          const totalTimeToGameState = updateTime - streamStartTimeRef.current;
+          console.log(`[LATENCY] Complete game state update received after ${totalTimeToGameState}ms`);
+          console.log(`[LATENCY] Time from stream end to game state: ${streamingState.streamComplete ? 
+            updateTime - (streamStartTimeRef.current + (updateTime - streamStartTimeRef.current)) : 'N/A'}`);
+        }
+        
         setStreamingState(prev => ({
           ...prev,
           streamComplete: true
@@ -84,12 +98,24 @@ export function useGameSync() {
       }
     };
     
+    // Store the stream start time for latency measurements
+    const streamStartTimeRef = useRef<number>(0);
+    const firstChunkTimeRef = useRef<number>(0);
+    const chunkCountRef = useRef<number>(0);
+
     // Handle streaming events
     const handleStreamStart = (data: { 
       cardId: string;
       playerId: string;
       timestamp: number;
     }) => {
+      // Record stream start time for latency measurement
+      const clientStartTime = Date.now();
+      streamStartTimeRef.current = clientStartTime;
+      firstChunkTimeRef.current = 0;
+      chunkCountRef.current = 0;
+      
+      console.log(`[LATENCY] LLM stream started at client time ${clientStartTime}ms (server time: ${data.timestamp}ms)`);
       console.log('LLM stream started:', data);
       
       // Reset accumulated text
@@ -123,6 +149,23 @@ export function useGameSync() {
     }) => {
       if (!streamingState.isStreaming) return;
       
+      // Get current time for latency measurement
+      const currentTime = Date.now();
+      chunkCountRef.current++;
+      
+      // Track first chunk arrival time
+      if (firstChunkTimeRef.current === 0) {
+        firstChunkTimeRef.current = currentTime;
+        const timeSinceStart = firstChunkTimeRef.current - streamStartTimeRef.current;
+        console.log(`[LATENCY] First chunk received after ${timeSinceStart}ms`);
+      }
+      
+      // Log every 5th chunk to avoid flooding
+      if (chunkCountRef.current % 5 === 0) {
+        const timeSinceStart = currentTime - streamStartTimeRef.current;
+        console.log(`[LATENCY] Chunk #${chunkCountRef.current} received after ${timeSinceStart}ms`);
+      }
+      
       // Accumulate content for JSON parsing
       accumulatedTextRef.current += data.content;
       
@@ -143,6 +186,7 @@ export function useGameSync() {
             playerId: data.playerId
           }
         });
+        console.log(`[LATENCY] On-play description displayed after ${currentTime - streamStartTimeRef.current}ms`);
       }
       
       // Try to extract and display the narrative if possible
@@ -157,6 +201,11 @@ export function useGameSync() {
       playerId: string;
       timestamp: number;
     }) => {
+      // Calculate total streaming time
+      const endTime = Date.now();
+      const totalStreamTime = endTime - streamStartTimeRef.current;
+      console.log(`[LATENCY] LLM stream completed after ${totalStreamTime}ms with ${chunkCountRef.current} chunks`);
+      console.log(`[LATENCY] First chunk arrived after ${firstChunkTimeRef.current - streamStartTimeRef.current}ms`);
       console.log('LLM stream ended:', data);
       
       // Update streaming state
@@ -181,6 +230,13 @@ export function useGameSync() {
           cardId: data.cardId,
           playerId: data.playerId
         }
+      });
+      
+      // Important: Turn off processing state since streaming is complete
+      // This is needed because we don't turn it off in dispatchAction when using socket
+      dispatchUI({ 
+        type: 'SET_PROCESSING', 
+        payload: { isProcessing: false } 
       });
     };
     
@@ -217,6 +273,18 @@ export function useGameSync() {
           error: data.message
         }
       });
+      
+      // Important: Turn off processing state in case of error
+      dispatchUI({ 
+        type: 'SET_PROCESSING', 
+        payload: { isProcessing: false } 
+      });
+      
+      // Show error notification
+      dispatchUI({
+        type: 'SET_ERROR',
+        payload: { message: `Stream error: ${data.message}` }
+      });
     };
     
     // Function to attempt extracting the narrative from streaming JSON
@@ -226,6 +294,12 @@ export function useGameSync() {
         const match = text.match(/"narrative"\s*:\s*"([^"]+)"/);
         if (match) {
           const narrative = match[1];
+          const currentTime = Date.now();
+          
+          // Log when we first extract the narrative
+          if (!isFinal) {
+            console.log(`[LATENCY] Narrative extracted after ${currentTime - streamStartTimeRef.current}ms`);
+          }
           
           // Add narrative to game log
           dispatchUI({
@@ -251,10 +325,17 @@ export function useGameSync() {
         const match = text.match(/"stateChanges"\s*:\s*\[([\s\S]*?)\]/);
         if (match) {
           const stateChangesText = match[1];
+          const currentTime = Date.now();
+          
+          // Log when we first extract state changes
+          if (!isFinal) {
+            console.log(`[LATENCY] State changes extracted after ${currentTime - streamStartTimeRef.current}ms`);
+          }
           
           // Find individual effect objects
           const objectRegex = /\{[\s\S]*?("narration"\s*:\s*"[^"]+")([\s\S]*?)\}/g;
           const effects = [];
+          let effectCount = 0;
           
           // For each state change with a narration, add it to the game log
           let objectMatch;
@@ -262,6 +343,7 @@ export function useGameSync() {
             const narrationMatch = objectMatch[1].match(/"narration"\s*:\s*"([^"]+)"/);
             if (narrationMatch) {
               const narration = narrationMatch[1];
+              effectCount++;
               
               dispatchUI({
                 type: 'ADD_LOG_ENTRY',
@@ -275,6 +357,11 @@ export function useGameSync() {
               });
             }
           }
+          
+          // Log the number of effects found (only on first extraction)
+          if (!isFinal && effectCount > 0) {
+            console.log(`[LATENCY] Extracted ${effectCount} effect narrations after ${currentTime - streamStartTimeRef.current}ms`);
+          }
         }
       } catch (error) {
         console.warn('Error extracting effects from stream', error);
@@ -284,6 +371,20 @@ export function useGameSync() {
     // Register socket event handlers
     socket.on('connect', handleConnect);
     socket.on('disconnect', handleDisconnect);
+    socket.on('error', (errorData) => {
+      console.error('Socket error:', errorData);
+      dispatchUI({
+        type: 'SET_ERROR',
+        payload: { message: `Server error: ${errorData.message || 'Unknown error'}` }
+      });
+      
+      // Turn off processing state in case of error
+      dispatchUI({ 
+        type: 'SET_PROCESSING', 
+        payload: { isProcessing: false } 
+      });
+    });
+    
     socketService.onGameStateUpdate(handleGameStateUpdate);
     
     // Register streaming event handlers
@@ -292,15 +393,28 @@ export function useGameSync() {
     socketService.onLLMStreamEnd(handleStreamEnd);
     socketService.onLLMStreamError(handleStreamError);
     
+    // Log all socket events for debugging
+    console.log('SOCKET DEBUG: Registered socket event handlers:');
+    console.log('- connect');
+    console.log('- disconnect');
+    console.log('- game-state-update');
+    console.log('- llm-stream-start');
+    console.log('- llm-stream-chunk');
+    console.log('- llm-stream-end');
+    console.log('- llm-stream-error');
+    
     // Clean up event listeners
     return () => {
       socket.off('connect', handleConnect);
       socket.off('disconnect', handleDisconnect);
+      socket.off('error'); // Remove error handler
       socket.off('game-state-update', handleGameStateUpdate);
       socket.off('llm-stream-start', handleStreamStart);
       socket.off('llm-stream-chunk', handleStreamChunk);
       socket.off('llm-stream-end', handleStreamEnd);
       socket.off('llm-stream-error', handleStreamError);
+      
+      console.log('SOCKET DEBUG: Cleaned up socket event handlers');
       
       if (gameIdRef.current) {
         socketService.leaveGameRoom(gameIdRef.current);

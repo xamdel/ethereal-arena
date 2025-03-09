@@ -209,9 +209,14 @@ const handlePlayCard = async (state: GameState, action: GameAction): Promise<Gam
     const { llmService } = await import('./llm-service');
     await llmService.clearCardEnergyCostCache(action.playerId);
     
+    // 4. Check if this is a streaming request
+    const useStreaming = !!action.payload?.streamResponse;
+    
+    console.log(`[Game Reducer] Use streaming mode: ${useStreaming}`);
     console.log(`[Game Reducer] Calling LLM service for card effect interpretation...`);
     
-    // 4. NOW interpret the card effects using the LLM service
+    // If streaming mode is handled by the socket server, we still need to
+    // interpret the card effects here to update the game state
     const interpretation = await llmService.interpretCardEffects(
       playedCard,
       action.playerId,

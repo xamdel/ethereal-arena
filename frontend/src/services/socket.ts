@@ -34,6 +34,11 @@ export const initSocket = (): Socket => {
     socket.on('connect_error', (error) => {
       console.error('Connection error:', error);
     });
+    
+    // Add socket error handler for socket server errors
+    socket.on('error', (errorData) => {
+      console.error('Socket server error:', errorData);
+    });
   }
   
   return socket;

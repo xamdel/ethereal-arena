@@ -133,6 +133,116 @@ export class EffectInterpreter {
     }
   }
 
+  /**
+   * Interpret card effects using streaming response from LLM
+   * Returns a stream of events that can be used for real-time UI updates
+   */
+  public async *interpretCardEffectsStreaming(
+    context: CardPlayContext
+  ): AsyncGenerator<EffectInterpretationStreamEvent, void, unknown> {
+    // Step 1: Check if the player can play the card based on cost vs available energy
+    const canPlay = await this.checkIfPlayerCanPlayCard(context);
+    
+    if (!canPlay) {
+      yield {
+        type: 'error',
+        content: "Not enough energy to play this card.",
+        complete: true
+      };
+      return;
+    }
+
+    // Step 2: If player can play the card, create the stream
+    const prompt = this.createEffectInterpretationPrompt(context);
+    const stream = this.llmClient.createStream(prompt, {
+      temperature: 0.3,
+      systemPrompt: this.getEffectInterpretationSystemPrompt(),
+    });
+
+    // Process the stream
+    let accumulatedText = '';
+    let narrativeExtracted = false;
+    let effectsExtracted: string[] = [];
+
+    for await (const chunk of stream) {
+      // Extract content from the chunk
+      const content = chunk.choices?.[0]?.delta?.content || '';
+      if (!content) continue;
+      
+      // Add to accumulated text
+      accumulatedText += content;
+      
+      // Yield the raw chunk for debugging/logging
+      yield {
+        type: 'narrative',
+        content,
+        complete: false
+      };
+
+      // Try to extract the narrative if not already done
+      if (!narrativeExtracted) {
+        try {
+          const narrativeMatch = accumulatedText.match(/"narrative"\s*:\s*"([^"]+)"/);
+          if (narrativeMatch) {
+            narrativeExtracted = true;
+            yield {
+              type: 'narrative',
+              content: narrativeMatch[1],
+              complete: false
+            };
+          }
+        } catch (error) {
+          console.warn('[EffectInterpreter] Error extracting narrative from stream', error);
+        }
+      }
+
+      // Try to extract effect narrations
+      try {
+        // Look for state changes with narrations
+        const narrationRegex = /"narration"\s*:\s*"([^"]+)"/g;
+        let match;
+        
+        // Find all narration matches
+        while ((match = narrationRegex.exec(accumulatedText)) !== null) {
+          const narration = match[1];
+          const fullMatch = match[0];
+          
+          // Check if we've already extracted this narration
+          if (!effectsExtracted.includes(fullMatch)) {
+            effectsExtracted.push(fullMatch);
+            
+            yield {
+              type: 'effect',
+              content: narration,
+              complete: false
+            };
+          }
+        }
+      } catch (error) {
+        console.warn('[EffectInterpreter] Error extracting effects from stream', error);
+      }
+    }
+
+    // Final processing when stream is complete
+    try {
+      const interpretation = this.parseEffectInterpretation(accumulatedText);
+      
+      // Yield a complete event with the full interpretation
+      yield {
+        type: 'narrative',
+        content: JSON.stringify(interpretation),
+        complete: true
+      };
+    } catch (error) {
+      console.error('[EffectInterpreter] Error parsing final interpretation', error);
+      yield {
+        type: 'error',
+        content: `Error parsing effect interpretation: ${error instanceof Error ? error.message : 'Unknown error'}`,
+        complete: true
+      };
+    }
+  }
+
   public async interpretCardEffects(context: CardPlayContext): Promise<{
     stateChanges: StateChangeAction[];
     narrative: string;
