@@ -99,24 +99,25 @@ io.on('connection', (socket) => {
         }
         
         console.log(`[Socket.IO] Action processed successfully, broadcasting update`);
-        
+
         // Broadcast the updated game state to all clients in the room
-        io.to(gameId).emit('game-state-update', { 
+        io.to(gameId).emit('game-state-update', {
           gameState: result.session.gameState,
-          action: action
+          action: action,
+          correlationId: action.correlationId
         });
       }
     } catch (error) {
       console.error(`[Socket.IO] Error processing action:`, error);
-      socket.emit('error', { 
+      socket.emit('error', {
         message: error instanceof Error ? error.message : 'Unknown error processing action'
       });
     }
   });
-  
-  // Handle start game request
-  socket.on('start-game', async (data) => {
-    const { gameId } = data;
+
+    // Handle start game request
+    socket.on('start-game', async (data) => {
+      const { gameId } = data;
     
     if (!gameId) {
       socket.emit('error', { message: 'Game ID is required' });
@@ -136,22 +137,22 @@ io.on('connection', (socket) => {
       }
       
       console.log(`[Socket.IO] Game ${gameId} started successfully`);
-      
       // Broadcast the game start and updated state
       io.to(gameId).emit('game-started', {
-        gameState: startedSession.gameState
+        gameState: startedSession.gameState,
+        correlationId: data.correlationId
       });
     } catch (error) {
       console.error(`[Socket.IO] Error starting game:`, error);
-      socket.emit('error', { 
+      socket.emit('error', {
         message: error instanceof Error ? error.message : 'Unknown error starting game'
       });
     }
   });
-  
+
   // Handle select cards request
-  socket.on('select-cards', async (data) => {
-    const { gameId, playerId, selectedCardIds } = data;
+    socket.on('select-cards', async (data) => {
+      const { gameId, playerId, selectedCardIds } = data;
     
     if (!gameId || !playerId || !selectedCardIds) {
       socket.emit('error', { message: 'Invalid card selection data' });
@@ -185,21 +186,21 @@ io.on('connection', (socket) => {
         });
         return;
       }
-      
       console.log(`[Socket.IO] Cards selected successfully, broadcasting update`);
-      
+
       // Broadcast the updated game state
-      io.to(gameId).emit('game-state-update', { 
+      io.to(gameId).emit('game-state-update', {
         gameState: result.session.gameState,
-        action: selectAction
+        action: selectAction,
+        correlationId: data.correlationId
       });
     } catch (error) {
       console.error(`[Socket.IO] Error selecting cards:`, error);
-      socket.emit('error', { 
+      socket.emit('error', {
         message: error instanceof Error ? error.message : 'Unknown error selecting cards'
       });
     }
-  });
+    });
   
   // Handle disconnections
   socket.on('disconnect', () => {
@@ -242,7 +243,8 @@ async function handleStreamingCardPlay(socket: Socket, gameId: string, action: G
     }
     
     // Get card and player information from the action
-    const { cardId, playerId, targetId } = action.payload;
+    const { cardId, targetId } = action.payload;
+    const playerId = action.playerId;
     
     // Debug game state
     console.log(`[Socket.IO] Game state players:`, Object.keys(session.gameState.players));
@@ -271,63 +273,70 @@ async function handleStreamingCardPlay(socket: Socket, gameId: string, action: G
     // Try to find the card in the player's hand
     let card = player.hand.find(c => c.id === cardId);
     
-    // If the card isn't in the hand, it might have been removed already by another API call
-    if (!card) {
-      console.warn(`[Socket.IO] Card ${cardId} not found in player's hand. Checking discard pile...`);
-      
-      // Check if it's in the discard pile (already played)
-      if (player.discardPile && Array.isArray(player.discardPile)) {
-        card = player.discardPile.find(c => c.id === cardId);
-        
-        if (card) {
-          console.log(`[Socket.IO] Card ${cardId} found in discard pile. Using it for streaming.`);
-        }
-      }
-      
-      // If still not found, check deck as fallback
-      if (!card && player.deck && Array.isArray(player.deck)) {
-        card = player.deck.find(c => c.id === cardId);
-        
-        if (card) {
-          console.log(`[Socket.IO] Card ${cardId} found in deck. Using it for streaming.`);
-        }
-      }
-      
-      // If still not found, try to get more info about the error
+      // If the card isn't in the hand, it might have been removed already by another API call
       if (!card) {
-        console.error(`[Socket.IO] Card ${cardId} not found in any of player ${playerId}'s card collections`);
-        console.log(`[Socket.IO] Collections available:`, {
-          hand: player.hand?.length || 0,
-          discard: player.discardPile?.length || 0,
-          deck: player.deck?.length || 0
-        });
-        
-        // Instead of failing completely, let's create a dummy card with the ID so streaming can continue
-        console.log(`[Socket.IO] Creating dummy card for streaming`);
-        card = {
-          id: cardId,
-          name: "Unknown Card",
-          description: "This card's details are missing",
-          type: "Unknown",
-          cost: 0,
-          rarity: "common",
-          base_effects: "Unknown effects"
-        };
+        console.warn(`[Socket.IO] Card ${cardId} not found in player's hand. Checking discard pile...`);
+
+        // Check if it's in the discard pile (already played)
+        if (player.discard && Array.isArray(player.discard)) {
+          card = player.discard.find(c => c.id === cardId);
+
+          if (card) {
+            console.log(`[Socket.IO] Card ${cardId} found in discard pile. Using it for streaming.`);
+          }
+        }
+
+        // If still not found, check deck as fallback
+        if (!card && player.deck && Array.isArray(player.deck)) {
+          card = player.deck.find(c => c.id === cardId);
+
+          if (card) {
+            console.log(`[Socket.IO] Card ${cardId} found in deck. Using it for streaming.`);
+          }
+        }
+
+        // If still not found, try to get more info about the error
+        if (!card) {
+          console.error(`[Socket.IO] Card ${cardId} not found in any of player ${playerId}'s card collections`);
+          console.log(`[Socket.IO] Collections available:`, {
+            hand: player.hand?.length || 0,
+            discard: player.discard?.length || 0,
+            deck: player.deck?.length || 0
+          });
+
+          // Instead of failing completely, let's create a dummy card with the ID so streaming can continue
+          console.log(`[Socket.IO] Creating dummy card for streaming`);
+          card = {
+            id: cardId,
+            name: "Unknown Card",
+            description: "This card's details are missing",
+            art_prompt: "A training dummy",
+            cost: 0,
+            createdAt: Date.now(),
+            createdBy: "llm",
+            base_effects: "Unknown effects"
+          };
+        }
       }
-    }
-    
+
+      if (!card) {
+        console.error(`[Socket.IO] Card ${cardId} is still undefined after fallback. Aborting stream.`);
+        socket.emit('error', { message: 'Card not found' });
+        return;
+      }
+
     console.log(`[Socket.IO] Playing card "${card.name}" (${cardId}) for player ${playerId}`);
-    
+
     // Send the on_play_description immediately if available
-    if (card.on_play_description) {
+    if (card?.on_play_description) {
       // Process any placeholders in the description
       let description = card.on_play_description;
       description = description.replace(/\[player\]/g, session.gameState.players[playerId]?.name || 'You');
-      description = description.replace(/\[opponent\]/g, 
+      description = description.replace(/\[opponent\]/g,
         Object.values(session.gameState.players).find(p => p.id !== playerId)?.name || 'opponent');
-      
+
       console.log(`[Socket.IO] Sending immediate on_play_description: "${description}"`);
-      
+
       // Emit the immediate description
       io.to(gameId).emit('llm-stream-chunk', {
         type: 'on-play-description',

@@ -3,6 +3,7 @@
 import { useGame } from '@/context';
 import { Card, GameAction, ActionType } from '@/types';
 import { v4 as uuidv4 } from 'uuid';
+import { gameSync } from '../hooks/useGameSync';
 
 /**
  * Custom hook with game action creators
@@ -10,17 +11,20 @@ import { v4 as uuidv4 } from 'uuid';
  */
 export function useGameActions() {
   const { 
-    gameState, 
-    dispatch, 
-    dispatchUI, 
-    calculateCardEnergyCost, 
-    clearCardEnergyCosts, 
-    getCardEnergyCost 
+    gameState,
+    dispatchUI,
+    calculateCardEnergyCost,
+    clearCardEnergyCosts,
+    getCardEnergyCost
   } = useGame();
 
-  // Generate a unique action ID
+  // Action sequence number
+  let actionSequenceNumber = 0;
+
+  // Generate a unique action ID with a sequence number
   const generateActionId = (): string => {
-    return uuidv4();
+    actionSequenceNumber++;
+    return `${uuidv4()}-${actionSequenceNumber}`;
   };
 
   // Initialize a new game
@@ -48,11 +52,11 @@ export function useGameActions() {
             validated: true
           };
     
-          dispatch(action);
-          resolve();
-        } else {
-          // For real backend connection, we need to create a game via API
-          const playerId = generateActionId();
+            resolve();
+        }
+    else {
+      // For real backend connection, we need to create a game via API
+      const playerId = generateActionId();
           
           // Set UI to loading state
           dispatchUI({ 
@@ -61,8 +65,8 @@ export function useGameActions() {
           });
           
           // Import and use the API service
-          const { createGame, startGame } = await import('@/services/api');
-          
+          const { createGame } = await import('@/services/api');
+
           try {
             // Call the backend API to create a new game
             console.log(`Creating new game for player ${playerId}`);
@@ -71,56 +75,42 @@ export function useGameActions() {
               'Player', // Default player name
               isSinglePlayer
             );
-            
+
             console.log(`Game created with ID: ${gameId}`);
-            
-            // Now start the game to generate cards
-            console.log(`Starting game: ${gameId}`);
-            const { gameState: startedGameState } = await startGame(gameId);
-            
-            console.log(`Game started successfully`);
-            console.log(`Hand sizes after game start:`);
-            Object.keys(startedGameState.players).forEach(id => {
-              const handSize = startedGameState.players[id].hand?.length || 0;
-              console.log(`- Player ${id}: ${handSize} cards`);
-            });
-            
-            // Initialize with the returned game state
-            const action: GameAction = {
-              id: generateActionId(),
-              type: ActionType.GAME_INIT,
-              playerId: 'system',
-              payload: {
-                ...startedGameState,
-                isMultiplayer: !isSinglePlayer
-              },
-              timestamp: Date.now(),
+
+            // Now start the game using gameSync
+            await gameSync.sendAction({
+              type: 'start-game',
               gameId: gameId,
-              validated: true
-            };
-            
-            dispatch(action);
+              playerId: playerId,
+              payload: {},
+              timestamp: Date.now(),
+              id: generateActionId(),
+              validated: false,
+            });
+
             resolve();
           } catch (error) {
-            console.error("Error creating game with backend:", error);
+            console.error('Error creating game with backend:', error);
+            console.log('Attempting to fall back to mock data...');
             // Fall back to mock data
             initializeEmptyGame(isSinglePlayer);
             // Show error to user
             dispatchUI({
               type: 'SET_ERROR',
-              payload: { message: 'Failed to connect to game server. Using offline mode.' }
+              payload: { message: 'Failed to connect to game server. Using offline mode.' },
             });
             reject(error);
           } finally {
             // Reset loading state
-            dispatchUI({ 
-              type: 'SET_PROCESSING', 
-              payload: { isProcessing: false } 
+            dispatchUI({
+              type: 'SET_PROCESSING',
+              payload: { isProcessing: false },
             });
           }
         }
       } catch (error) {
-        console.error("Error in initGame:", error);
+        console.error('Error in initGame:', error);
         initializeEmptyGame(isSinglePlayer);
         reject(error);
       }
@@ -153,12 +143,31 @@ export function useGameActions() {
       validated: true
     };
 
-    dispatch(action);
   };
 
   // Play a card
   const playCard = async (cardId: string, targetPlayerId?: string) => {
     console.log('[Debug] Starting playCard function with:', { cardId, targetPlayerId });
+    
+    // Validate game state before proceeding
+    if (!gameState.id) {
+      console.error('playCard: Game ID is not set');
+      dispatchUI({
+        type: 'SET_ERROR',
+        payload: { message: 'Game not initialized - cannot play card' }
+      });
+      return;
+    }
+
+    const playerID = gameState.activePlayerId;
+    if (!playerID) {
+      console.error('playCard: Active player ID is not set');
+      dispatchUI({
+        type: 'SET_ERROR',
+        payload: { message: 'No active player - cannot play card' }
+      });
+      return;
+    }
     
     // Set UI state to processing
     dispatchUI({ 
@@ -168,10 +177,7 @@ export function useGameActions() {
 
     try {
       console.log(`Playing card ${cardId}${targetPlayerId ? ` targeting ${targetPlayerId}` : ''}`);
-      
-      // Use the active player ID directly from the game state
-      const playerID = gameState.activePlayerId || 'unknown';
-      
+
       // Get the cached energy cost calculation
       const energyCost = getCardEnergyCost(cardId);
       
@@ -215,42 +221,37 @@ export function useGameActions() {
           });
         }
       }
-      
-      // Create action with streaming flag enabled
-      const action: GameAction = {
+      // Using dispatch to trigger the updated server communication flow
+      await gameSync.sendAction({
         id: generateActionId(),
         type: ActionType.PLAY_CARD,
         playerId: playerID,
         payload: {
           cardId,
           targetPlayerId,
-          streamResponse: true // Enable streaming for this card play
         },
         timestamp: Date.now(),
         gameId: gameState.id,
         validated: false // Validation happens on the server
-      };
+      }, { streamResponse: true });
 
-      // Using dispatch to trigger the updated server communication flow
-      await dispatch(action);
-      
       console.log('Card played successfully');
-      
+
       // Clear the energy cost cache since the state has changed
       clearCardEnergyCosts();
-    } catch (error) {
+} catch (error) {
       console.error('Error playing card:', error);
-      dispatchUI({ 
-        type: 'SET_ERROR', 
-        payload: { message: 'Failed to play card. Please try again.' } 
+      dispatchUI({
+        type: 'SET_ERROR',
+        payload: { message: 'Failed to play card. Please try again.' }
       });
     } finally {
-      dispatchUI({ 
-        type: 'SET_PROCESSING', 
-        payload: { isProcessing: false } 
+      dispatchUI({
+        type: 'SET_PROCESSING',
+        payload: { isProcessing: false }
       });
     }
-  };
+};
 
   // End the current turn
   const endTurn = async () => {
@@ -265,7 +266,7 @@ export function useGameActions() {
       // Use the active player ID directly from the game state
       const playerID = gameState.activePlayerId || 'unknown';
       
-      const action: GameAction = {
+      await gameSync.sendAction({
         id: generateActionId(),
         type: ActionType.END_TURN,
         playerId: playerID,
@@ -273,10 +274,7 @@ export function useGameActions() {
         timestamp: Date.now(),
         gameId: gameState.id,
         validated: false
-      };
-
-      // Using dispatch to trigger the updated server communication flow
-      await dispatch(action);
+      });
       
       console.log('Turn ended successfully');
     } catch (error) {
@@ -370,8 +368,7 @@ export function useGameActions() {
         validated: false
       };
       
-      // Using dispatch to trigger the updated server communication flow
-      await dispatch(action);
+      await gameSync.sendAction(action);
       
       console.log('Initial cards selected successfully');
     } catch (error) {

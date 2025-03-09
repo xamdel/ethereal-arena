@@ -59,7 +59,7 @@ export function useGameSelectors() {
     return currentPlayer.hand.filter(card => card.cost <= currentPlayer.energy);
   };
 
-  // Check if a specific card can be played
+  // Check if a specific card can be played //TODO: SWITCH TO LLM COST CALCULATOR
   const canPlayCard = (cardId: string): boolean => {
     const currentPlayer = getCurrentPlayer();
     if (!currentPlayer || !isPlayerTurn()) return false;

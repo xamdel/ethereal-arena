@@ -106,6 +106,7 @@ export interface GameAction {
   timestamp: number;
   gameId: string;
   validated: boolean; // Indicates if action has been validated by the server
+  correlationId?: string; // Optional correlation ID for request/response tracking
 }
 
 /**

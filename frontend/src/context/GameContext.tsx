@@ -1,8 +1,9 @@
 'use client';
 
 import { createContext, useContext, useReducer, ReactNode, useState, useEffect } from 'react';
-import { GameState, GameAction, ActionType } from '@/types';
+import { GameState, GameAction, ActionType, Card } from '@/types';
 import { v4 as uuidv4 } from 'uuid';
+import { gameSync } from '@/hooks/useGameSync';
 
 // Initial empty game state
 const initialGameState: GameState = {
@@ -93,7 +94,7 @@ function gameStateReducer(state: GameState, action: GameAction): GameState {
       const card = activePlayer.hand[cardIndex];
       
       // Check if player has enough energy
-      if (activePlayer.energy < card.cost) return state;
+      if (activePlayer.energy < card.cost) return state; //TODO: switch to cost calculator LLM
       
       // Remove the card from hand and add to discard
       const updatedHand = [...activePlayer.hand];
@@ -395,6 +396,7 @@ interface GameContextType {
   calculateCardEnergyCost: (cardId: string) => Promise<void>;
   clearCardEnergyCosts: () => void;
   getCardEnergyCost: (cardId: string) => { canPlay: boolean; energyCost: number; reason: string } | null;
+  connectionState: "connected" | "connecting" | "disconnected";
 }
 
 // Create the context
@@ -404,124 +406,42 @@ const GameContext = createContext<GameContextType | undefined>(undefined);
 export function GameProvider({ children }: { children: ReactNode }) {
   const [gameState, dispatch] = useReducer(gameStateReducer, initialGameState);
   const [uiState, dispatchUI] = useReducer(uiStateReducer, initialUIState);
+    const [connectionState, setConnectionState] = useState<"connected" | "connecting" | "disconnected">("connecting");
+
+    useEffect(() => {
+        gameSync.initialize(gameState, dispatch, dispatchUI);
+        gameSync.isConnected ? setConnectionState("connected") : setConnectionState("disconnected")
+    }, []);
   
   // Client/server adapter function
-  const dispatchAction = async (action: GameAction) => {
-    try {
-      // Fix playerId if it's set to 'current'
-      if (action.playerId === 'current') {
-        const currentPlayer = getCurrentPlayer();
-        if (currentPlayer) {
-          action.playerId = currentPlayer.id;
+    const dispatchAction = async (action: GameAction) => {
+        // Fix playerId if it's set to 'current'
+        if (action.playerId === 'current') {
+            const currentPlayer = getCurrentPlayer();
+            if (currentPlayer) {
+                action.playerId = currentPlayer.id;
+            }
         }
-      }
-      
-      console.log('Dispatching action:', action.type);
-      
-      // Initialize actions - we'll handle game initialization locally
-      if (action.type === ActionType.GAME_INIT) {
-        dispatch(action);
-        return;
-      }
-      
-      // For all other actions, show processing state and send to server
-      dispatchUI({ type: 'SET_PROCESSING', payload: { isProcessing: true } });
-      
-      try {
-        // IMPORTANT: Skip HTTP API completely for any streaming action
-        // and use only socket for those to avoid double-processing
-        const useSocketForAction = action.type === ActionType.PLAY_CARD && action.payload?.streamResponse === true;
-        
-        if (useSocketForAction) {
-          // Import and use socket service for streaming card plays
-          const { sendGameAction, joinGameRoom, initSocket } = await import('@/services/socket');
-          
-          console.log(`[SOCKET MODE] Sending action ${action.type} via WebSocket for game ${action.gameId}`);
-          console.log(`[SOCKET MODE] Action has streamResponse flag: ${action.payload?.streamResponse}`);
-          
-          // Initialize socket connection and ensure we're connected
-          const socket = initSocket();
-          if (!socket.connected) {
-            console.log('[SOCKET MODE] Socket not connected. Attempting connection...');
-            socket.connect();
-          }
-          
-          // Wait briefly to ensure connection is established
-          await new Promise(resolve => setTimeout(resolve, 100));
-          
-          // Log socket connection status
-          console.log(`[SOCKET MODE] Socket connected: ${socket.connected}`);
-          console.log(`[SOCKET MODE] Socket ID: ${socket.id}`);
-          
-          // Ensure we're in the game room
-          joinGameRoom(action.gameId);
-          
-          // Send the action via socket and add detailed debugging
-          console.log(`[SOCKET MODE] Sending action details:`, {
-            type: action.type,
-            playerId: action.playerId,
-            gameId: action.gameId,
-            payload: action.payload
-          });
-          
-          // Send the action to the server
-          sendGameAction(action.gameId, action);
-          
-          console.log(`[SOCKET MODE] Action sent. Waiting for stream events...`);
-          
-          // For socket actions, we don't turn off processing here
-          // The stream end handler will turn it off when streaming completes
-          
-          // We don't call dispatch() because socket handlers will update state
-          return; // Important: Return immediately to avoid HTTP API call
-        } else {
-          // For non-streaming actions, use the HTTP API
-          console.log(`[HTTP MODE] Sending action ${action.type} via HTTP API for game ${action.gameId}`);
-          const { submitAction } = await import('@/services/api');
-          const result = await submitAction(action.gameId, action);
-          
-          console.log(`Server processed action, updated state received:`, result);
-          
-          if (!result.gameState) {
-            console.error("Server response missing gameState:", result);
-            dispatchUI({ 
-              type: 'SET_ERROR', 
-              payload: { message: 'Invalid response from server. Game state not updated.' } 
-            });
+
+        console.log('Dispatching action:', action.type);
+
+        // Initialize actions - we'll handle game initialization locally
+        if (action.type === ActionType.GAME_INIT) {
+            dispatch(action);
             return;
-          }
-          
-          console.log("Updating game state with:", result.gameState);
-          
-          // Update the local state with the server response
-          dispatch({
-            ...action,
-            type: ActionType.GAME_INIT, // Hack to replace entire state
-            payload: result.gameState,
-            validated: true
-          });
         }
-      } catch (error) {
-        console.error("Error communicating with server:", error);
-        dispatchUI({ 
-          type: 'SET_ERROR', 
-          payload: { message: 'Failed to communicate with game server. Trying local mode.' }
-        });
-        
-        // Fall back to local processing
-        dispatch(action);
-      } finally {
-        // If it's a streaming action, don't turn off processing flag here -
-        // The socket events will handle it
-        if (!(action.type === ActionType.PLAY_CARD && action.payload?.streamResponse === true)) {
-          dispatchUI({ type: 'SET_PROCESSING', payload: { isProcessing: false } });
+
+        // Delegate all other actions to useGameSync
+        try {
+            await gameSync.sendAction(action, { streamResponse: action.type === ActionType.PLAY_CARD });
+        } catch (error) {
+            console.error("Error sending action:", error);
+            dispatchUI({
+                type: 'SET_ERROR',
+                payload: { message: 'Failed to communicate with game server.' }
+            });
         }
-      }
-    } catch (error) {
-      console.error("Error in dispatchAction:", error);
-      dispatch(action); // Fallback to local
-    }
-  };
+    };
   
   // Utility functions
   const isCurrentPlayerActive = () => {
@@ -701,7 +621,8 @@ export function GameProvider({ children }: { children: ReactNode }) {
         canPlayCard,
         calculateCardEnergyCost,
         clearCardEnergyCosts,
-        getCardEnergyCost
+        getCardEnergyCost,
+        connectionState
       }}
     >
       {children}
