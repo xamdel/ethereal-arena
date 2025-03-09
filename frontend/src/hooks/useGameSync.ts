@@ -1,476 +1,403 @@
 'use client';
 
-import { useEffect, useState, useRef, useCallback } from 'react';
-import { useGame } from '@/context';
-import { GameAction, GameState } from '@/types';
+import { useEffect, useRef, useCallback } from 'react';
+import { GameAction, GameState, ActionType } from '@/types';
 import * as socketService from '@/services/socket';
-import { v4 as uuidv4 } from 'uuid';
+import { connectionManager, ConnectionState } from '@/services/connection-manager';
+import { streamProcessor, ParsedNarrative, StreamingState } from '@/services/stream-processor';
+import { useSubscription } from './use-subscription';
 
-interface StreamingState {
-  isStreaming: boolean;
-  activeCardId?: string;
-  activePlayerId?: string;
-  streamContent: string;
-  streamComplete: boolean;
-}
+// Module-level variables to store state
+let gameId: string | null = null;
+let dispatchFn: any = null;
+let dispatchUIFn: any = null;
+let cleanupHandlers: (() => void) | null = null;
 
 /**
- * Custom hook for handling state synchronization with the server
- * Includes support for streaming LLM responses
+ * Helper functions for game sync outside of React lifecycle
  */
-function createGameSync() {
-    const [isConnected, setIsConnected] = useState(false);
-    const [lastSyncTime, setLastSyncTime] = useState(0);
-    const [streamingState, setStreamingState] = useState<StreamingState>({
-        isStreaming: false,
-        streamContent: '',
-        streamComplete: false
+// Send action with correlation IDs
+const sendAction = async (
+  action: GameAction, 
+  options: { streamResponse?: boolean } = {}
+): Promise<any> => {
+  if (!gameId) {
+    console.warn("Game ID not set. Cannot send action.");
+    return Promise.reject(new Error("Game ID not set."));
+  }
+
+  console.log(`Sending action:`, action);
+
+  // Send through socket service
+  return socketService.sendGameAction(
+    gameId, 
+    action, 
+    options
+  );
+};
+
+// Handle connection state changes
+const handleConnectionStateChange = (state: ConnectionState) => {
+  console.log(`Connection state changed to: ${state}`);
+  
+  if (dispatchUIFn) {
+    dispatchUIFn({
+      type: 'SET_CONNECTION',
+      payload: { isConnected: state === 'connected' }
     });
+  }
+  
+  // Re-join game room on reconnect
+  if (state === 'connected' && gameId) {
+    console.log(`Rejoining game room: ${gameId}`);
+    socketService.joinGameRoom(gameId, ''); // Player ID handled elsewhere
+  }
+};
 
-    // Refs
-    const accumulatedTextRef = useRef('');
-    const gameIdRef = useRef<string | null>(null);
-    const streamStartTimeRef = useRef<number>(0);
-    const firstChunkTimeRef = useRef<number>(0);
-    const chunkCountRef = useRef<number>(0);
-    const gameStateRef = useRef<GameState>({} as GameState); // Keep track of gameState
-    const dispatchRef = useRef<any>(null); // Keep track of dispatch
-    const dispatchUIRef = useRef<any>(null); // Keep track of dispatchUI
+// Handle game state updates
+const handleGameStateUpdate = (data: { gameState: GameState, action?: GameAction, correlationId?: string }) => {
+  console.log('Received game state update:', data);
+  
+  // Dispatch the full game state update
+  if (data.gameState && dispatchFn) {
+    dispatchFn({
+      type: ActionType.GAME_INIT,
+      payload: data.gameState,
+      playerId: 'system',
+      timestamp: Date.now(),
+      gameId: data.gameState.id,
+      validated: true
+    });
+  }
+};
 
-    // Centralized sendAction function with correlation IDs and Promise-based API
-    const sendAction = useCallback(async (action: GameAction, { streamResponse = false } = {}) => {
-        if (!gameIdRef.current) {
-            console.warn("Game ID not set. Cannot send action.");
-            return Promise.reject(new Error("Game ID not set."));
-        }
+// Add log entry helper
+const addLogEntry = (entry: {
+  type: string;
+  content: string;
+  cardId?: string;
+  playerId?: string;
+  isFinal?: boolean;
+}) => {
+  if (dispatchUIFn) {
+    dispatchUIFn({
+      type: 'ADD_LOG_ENTRY',
+      payload: entry
+    });
+  }
+};
 
-        const correlationId = action.id; // Use the action ID as the correlation ID
-        console.log(`Sending action with correlationId ${correlationId}:`, action);
-
-        return new Promise((resolve, reject) => {
-            // Send action via socket service, which now handles timeouts and queuing
-            socketService.sendGameAction(gameIdRef.current!, { ...action, correlationId })
-              .then((response) => {
-                // For non-streaming actions, dispatch immediately
-                if (!streamResponse) {
-                    if (response && response.gameState) {
-                        dispatchRef.current({
-                                type: 'SET_GAME_STATE',
-                            payload: response.gameState
-                        });
-                    }
-                  resolve(response);
-                } else {
-                  // For streaming, resolve is handled in streamEnd
-                  resolve(response);
-                }
-              }).catch(reject);
-          });
-    }, []);
-
-    // Set up socket connections and event handlers
-    useEffect(() => {
-        // Initialize socket connection
-        const socket = socketService.initSocket();
-        console.log('Connecting to game server via WebSocket...');
-
-        // Handle connection change
-        const handleConnect = () => {
-            console.log('✅ Connected to game server via WebSocket');
-            setIsConnected(true);
-            dispatchUIRef.current && dispatchUIRef.current({
-                type: 'SET_CONNECTION',
-                payload: { isConnected: true }
-            });
-
-            // Re-join the game room on reconnect
-            if (gameIdRef.current) {
-                console.log(`Joining game room: ${gameIdRef.current}`);
-                socketService.joinGameRoom(gameIdRef.current, ''); // Assuming player ID is handled elsewhere
-            }
-        };
-
-        const handleDisconnect = () => {
-            console.log('Disconnected from game server');
-            setIsConnected(false);
-            dispatchUIRef.current && dispatchUIRef.current({
-                type: 'SET_CONNECTION',
-                payload: { isConnected: false }
-            });
-        };
-
-        // Handle game state updates (now includes correlationId)
-        const handleGameStateUpdate = (data: { gameState: GameState, action?: GameAction, correlationId?: string }) => {
-            console.log('Received game state update:', data);
-            const updateTime = Date.now();
-            setLastSyncTime(updateTime);
-
-            // Dispatch the full game state update
-            if (data.gameState) {
-                dispatchRef.current && dispatchRef.current({
-                    type: 'SET_GAME_STATE',
-                    payload: data.gameState
-                });
-            }
-        };
-
-        // Handle streaming events
-        const handleStreamStart = (data: {
-            cardId: string;
-            playerId: string;
-            timestamp: number;
-            correlationId: string;
-        }) => {
-            // Record stream start time for latency measurement
-            const clientStartTime = Date.now();
-            streamStartTimeRef.current = clientStartTime;
-            firstChunkTimeRef.current = 0;
-            chunkCountRef.current = 0;
-
-            console.log(`[LATENCY] LLM stream started at client time ${clientStartTime}ms (server time: ${data.timestamp}ms)`);
-            console.log('LLM stream started:', data);
-
-            // Reset accumulated text
-            accumulatedTextRef.current = '';
-
-            // Update streaming state
-            setStreamingState({
-                isStreaming: true,
-                activeCardId: data.cardId,
-                activePlayerId: data.playerId,
-                streamContent: '',
-                streamComplete: false
-            });
-
-            // Update UI state to show streaming
-            dispatchUIRef.current && dispatchUIRef.current({
-                type: 'SET_STREAMING',
-                payload: {
-                    isStreaming: true,
-                    cardId: data.cardId,
-                    playerId: data.playerId
-                }
-            });
-        };
-
-        const handleStreamChunk = (data: {
-            type: string;
-            content: string;
-            cardId: string;
-            playerId: string;
-            correlationId: string;
-        }) => {
-            if (!streamingState.isStreaming) return;
-
-            // Get current time for latency measurement
-            const currentTime = Date.now();
-            chunkCountRef.current++;
-
-            // Track first chunk arrival time
-            if (firstChunkTimeRef.current === 0) {
-                firstChunkTimeRef.current = currentTime;
-                const timeSinceStart = firstChunkTimeRef.current - streamStartTimeRef.current;
-                console.log(`[LATENCY] First chunk received after ${timeSinceStart}ms`);
-            }
-
-            // Log every 5th chunk to avoid flooding
-            if (chunkCountRef.current % 5 === 0) {
-                const timeSinceStart = currentTime - streamStartTimeRef.current;
-                console.log(`[LATENCY] Chunk #${chunkCountRef.current} received after ${timeSinceStart}ms`);
-            }
-
-            // Accumulate content for JSON parsing
-            accumulatedTextRef.current += data.content;
-
-            // Update streaming state with new content
-            setStreamingState(prev => ({
-                ...prev,
-                streamContent: prev.streamContent + data.content
-            }));
-
-            // If this is an on-play-description, add it to the game log immediately
-            if (data.type === 'on-play-description') {
-                dispatchUIRef.current && dispatchUIRef.current({
-                    type: 'ADD_LOG_ENTRY',
-                    payload: {
-                        type: 'on-play-description',
-                        content: data.content,
-                        cardId: data.cardId,
-                        playerId: data.playerId
-                    }
-            });
-                console.log(`[LATENCY] On-play description displayed after ${currentTime - streamStartTimeRef.current}ms`);
-            }
-
-            // Try to extract and display the narrative if possible
-            tryExtractNarrative(accumulatedTextRef.current, data.cardId, data.playerId);
-
-            // Try to extract effects if possible
-            tryExtractEffects(accumulatedTextRef.current, data.cardId, data.playerId);
-        };
-
-        const handleStreamEnd = (data: {
-            cardId: string;
-            playerId: string;
-            timestamp: number;
-            correlationId: string;
-        }) => {
-            // Calculate total streaming time
-            const endTime = Date.now();
-            const totalStreamTime = endTime - streamStartTimeRef.current;
-            console.log(`[LATENCY] LLM stream completed after ${totalStreamTime}ms with ${chunkCountRef.current} chunks`);
-            console.log(`[LATENCY] First chunk arrived after ${firstChunkTimeRef.current - streamStartTimeRef.current}ms`);
-            console.log('LLM stream ended:', data);
-
-            // Update streaming state
-            setStreamingState(prev => ({
-                ...prev,
-                isStreaming: false,
-                streamComplete: true
-            }));
-
-            // Process one final time to catch any missed JSON
-            tryExtractNarrative(accumulatedTextRef.current, data.cardId, data.playerId, true);
-            tryExtractEffects(accumulatedTextRef.current, data.cardId, data.playerId, true);
-
-            // Clear accumulated text
-            accumulatedTextRef.current = '';
-
-            // Update UI state to show streaming complete
-            dispatchUIRef.current && dispatchUIRef.current({
-                type: 'SET_STREAMING',
-                payload: {
-                    isStreaming: false,
-                    cardId: data.cardId,
-                    playerId: data.playerId
-                }
-            });
-
-            // Important: Turn off processing state since streaming is complete
-            // This is needed because we don't turn it off in dispatchAction when using socket
-            dispatchUIRef.current && dispatchUIRef.current({
-                type: 'SET_PROCESSING',
-                payload: { isProcessing: false }
-            });
-        };
-
-        const handleStreamError = (data: {
-            message: string;
-            cardId?: string;
-            playerId?: string;
-            correlationId: string;
-        }) => {
-            console.error('LLM stream error:', data);
-
-            // Update streaming state
-            setStreamingState({
-                isStreaming: false,
-                streamContent: '',
-                streamComplete: true
-            });
-
-            // Show error message
-            dispatchUIRef.current && dispatchUIRef.current({
-                type: 'ADD_LOG_ENTRY',
-                payload: {
-                    type: 'error',
-                    content: `Error processing card: ${data.message}`,
-                    cardId: data.cardId,
-                    playerId: data.playerId
-                }
-            });
-
-            // Update UI state to show streaming error
-            dispatchUIRef.current && dispatchUIRef.current({
-                type: 'SET_STREAMING',
-                payload: {
-                    isStreaming: false,
-                    error: data.message
-                }
-            });
-
-            // Important: Turn off processing state in case of error
-            dispatchUIRef.current && dispatchUIRef.current({
-                type: 'SET_PROCESSING',
-                payload: { isProcessing: false }
-            });
-
-            // Show error notification
-            dispatchUIRef.current && dispatchUIRef.current({
-                type: 'SET_ERROR',
-                payload: { message: `Stream error: ${data.message}` }
-            });
-        };
-
-        // Function to attempt extracting the narrative from streaming JSON
-        const tryExtractNarrative = (text: string, cardId?: string, playerId?: string, isFinal: boolean = false) => {
-            try {
-                // Look for narrative in JSON
-                const match = text.match(/"narrative"\s*:\s*"([^"]+)"/);
-                if (match) {
-                    const narrative = match[1];
-                    const currentTime = Date.now();
-
-                    // Log when we first extract the narrative
-                    if (!isFinal) {
-                        console.log(`[LATENCY] Narrative extracted after ${currentTime - streamStartTimeRef.current}ms`);
-                    }
-
-                    // Add narrative to game log
-                    dispatchUIRef.current && dispatchUIRef.current({
-                        type: 'ADD_LOG_ENTRY',
-                        payload: {
-                            type: 'narrative',
-                            content: narrative,
-                            cardId,
-                            playerId,
-                            isFinal
-                        }
-                    });
-                }
-            } catch (error) {
-                console.warn('Error extracting narrative from stream', error);
-            }
-        };
-
-        // Function to attempt extracting state changes/effects from streaming JSON
-        const tryExtractEffects = (text: string, cardId?: string, playerId?: string, isFinal: boolean = false) => {
-            try {
-                // Look for state changes array in JSON
-                const match = text.match(/"stateChanges"\s*:\s*\[([\s\S]*?)\]/);
-                if (match) {
-                    const stateChangesText = match[1];
-                    const currentTime = Date.now();
-
-                    // Log when we first extract state changes
-                    if (!isFinal) {
-                        console.log(`[LATENCY] State changes extracted after ${currentTime - streamStartTimeRef.current}ms`);
-                    }
-
-                    // Find individual effect objects
-                    const objectRegex = /\{[\s\S]*?("narration"\s*:\s*"[^"]+")([\s\S]*?)\}/g;
-                    const effects = [];
-                    let effectCount = 0;
-
-                    // For each state change with a narration, add it to the game log
-                    let objectMatch;
-                    while ((objectMatch = objectRegex.exec(stateChangesText)) !== null) {
-                        const narrationMatch = objectMatch[1].match(/"narration"\s*:\s*"([^"]+)"/);
-                        if (narrationMatch) {
-                            const narration = narrationMatch[1];
-                            effectCount++;
-
-                            dispatchUIRef.current && dispatchUIRef.current({
-                                type: 'ADD_LOG_ENTRY',
-                                payload: {
-                                    type: 'effect',
-                                    content: narration,
-                                    cardId,
-                                    playerId,
-                                    isFinal
-                                }
-                            });
-                        }
-                    }
-
-                    // Log the number of effects found (only on first extraction)
-                    if (!isFinal && effectCount > 0) {
-                        console.log(`[LATENCY] Extracted ${effectCount} effect narrations after ${currentTime - streamStartTimeRef.current}ms`);
-                    }
-                }
-            } catch (error) {
-                console.warn('Error extracting effects from stream', error);
-            }
-        };
-
-        // Register socket event handlers
-        socket.on('connect', handleConnect);
-        socket.on('disconnect', handleDisconnect);
-        socket.on('error', (errorData) => {
-            console.error('Socket error:', errorData);
-            dispatchUIRef.current && dispatchUIRef.current({
-                type: 'SET_ERROR',
-                payload: { message: `Server error: ${errorData.message || 'Unknown error'}` }
-            });
-
-            // Turn off processing state in case of error
-            dispatchUIRef.current && dispatchUIRef.current({
-                type: 'SET_PROCESSING',
-                payload: { isProcessing: false }
-            });
+// Process parsed stream content helper
+const processParsedStreamContent = (
+  parsed: ParsedNarrative,
+  cardId?: string,
+  playerId?: string,
+  isFinal: boolean = false
+) => {
+  // Add narrative to log if available
+  if (parsed.narrative) {
+    addLogEntry({
+      type: 'narrative',
+      content: parsed.narrative,
+      cardId,
+      playerId,
+      isFinal
+    });
+  }
+  
+  // Add effect narrations to log if available
+  if (parsed.effects && parsed.effects.length > 0) {
+    parsed.effects.forEach(effect => {
+      if (effect.narration) {
+        addLogEntry({
+          type: 'effect',
+          content: effect.narration,
+          cardId,
+          playerId,
+          isFinal
         });
+      }
+    });
+  }
+};
 
-        socketService.onActionReceived((data) => {
-            // Handle action responses (if needed)
-            console.log("action-received", data);
-        });
+// Stream event handlers
+const handleStreamStart = (data: {
+  cardId: string;
+  playerId: string;
+  timestamp: number;
+  correlationId: string;
+}) => {
+  // Use stream processor to handle stream start
+  streamProcessor.handleStreamStart(data);
+  
+  // Update UI state to show streaming
+  if (dispatchUIFn) {
+    dispatchUIFn({
+      type: 'SET_STREAMING',
+      payload: {
+        isStreaming: true,
+        cardId: data.cardId,
+        playerId: data.playerId
+      }
+    });
+  }
+};
 
-        socketService.onGameStateUpdate(handleGameStateUpdate);
+const handleStreamChunk = (data: {
+  type: string;
+  content: string;
+  cardId: string;
+  playerId: string;
+  correlationId: string;
+}) => {
+  // Use stream processor to handle stream chunk
+  const parsed = streamProcessor.handleStreamChunk(data);
+  
+  // If this is an on-play-description, add it to the game log immediately
+  if (data.type === 'on-play-description') {
+    addLogEntry({
+      type: 'on-play-description',
+      content: data.content,
+      cardId: data.cardId,
+      playerId: data.playerId
+    });
+  }
+  
+  // Process parsed content if available
+  if (parsed) {
+    processParsedStreamContent(parsed, data.cardId, data.playerId, false);
+  }
+};
 
-        // Register streaming event handlers
-        socketService.onLLMStreamStart(handleStreamStart);
-        socketService.onLLMStreamChunk(handleStreamChunk);
-        socketService.onLLMStreamEnd(handleStreamEnd);
-        socketService.onLLMStreamError(handleStreamError);
+const handleStreamEnd = (data: {
+  cardId: string;
+  playerId: string;
+  timestamp: number;
+  correlationId: string;
+}) => {
+  // Use stream processor to handle stream end
+  const parsed = streamProcessor.handleStreamEnd(data);
+  
+  // Process final parsed content if available
+  if (parsed) {
+    processParsedStreamContent(parsed, data.cardId, data.playerId, true);
+  }
+  
+  // Update UI state to show streaming complete
+  if (dispatchUIFn) {
+    dispatchUIFn({
+      type: 'SET_STREAMING',
+      payload: {
+        isStreaming: false,
+        cardId: data.cardId,
+        playerId: data.playerId
+      }
+    });
+    
+    // Turn off processing state since streaming is complete
+    dispatchUIFn({
+      type: 'SET_PROCESSING',
+      payload: { isProcessing: false }
+    });
+  }
+};
 
-        // Log all socket events for debugging
-        console.log('SOCKET DEBUG: Registered socket event handlers:');
-        console.log('- connect');
-        console.log('- disconnect');
-        console.log('- game-state-update');
-        console.log('- llm-stream-start');
-        console.log('- llm-stream-chunk');
-        console.log('- llm-stream-end');
-        console.log('- llm-stream-error');
+const handleStreamError = (data: {
+  message: string;
+  cardId?: string;
+  playerId?: string;
+  correlationId: string;
+}) => {
+  // Use stream processor to handle stream error
+  streamProcessor.handleStreamError(data);
+  
+  if (dispatchUIFn) {
+    // Show error message in log
+    addLogEntry({
+      type: 'error',
+      content: `Error processing card: ${data.message}`,
+      cardId: data.cardId,
+      playerId: data.playerId
+    });
+    
+    // Update UI state to show streaming error
+    dispatchUIFn({
+      type: 'SET_STREAMING',
+      payload: {
+        isStreaming: false,
+        error: data.message
+      }
+    });
+    
+    // Turn off processing state in case of error
+    dispatchUIFn({
+      type: 'SET_PROCESSING',
+      payload: { isProcessing: false }
+    });
+    
+    // Show error notification
+    dispatchUIFn({
+      type: 'SET_ERROR',
+      payload: { message: `Stream error: ${data.message}` }
+    });
+  }
+};
 
-        // Clean up event listeners
-        return () => {
-            socket.off('connect', handleConnect);
-            socket.off('disconnect', handleDisconnect);
-            socket.off('error'); // Remove error handler
-            socket.off('game-state-update', handleGameStateUpdate);
-            socket.off('llm-stream-start', handleStreamStart);
-            socket.off('llm-stream-chunk', handleStreamChunk);
-            socket.off('llm-stream-end', handleStreamEnd);
-            socket.off('llm-stream-error', handleStreamError);
+// Handle game started event
+const handleGameStarted = (data: { gameState: GameState, correlationId: string }) => {
+  console.log('Received game-started event:', data);
+  
+  // Dispatch the game state update
+  if (data.gameState && dispatchFn) {
+    dispatchFn({
+      type: ActionType.GAME_INIT,
+      payload: data.gameState,
+      playerId: 'system',
+      timestamp: Date.now(),
+      gameId: data.gameState.id,
+      validated: true
+    });
+    
+    // Log the cards that were generated
+    const playerIds = Object.keys(data.gameState.players);
+    playerIds.forEach(playerId => {
+      const handSize = data.gameState.players[playerId].hand?.length || 0;
+      console.log(`Player ${playerId} received ${handSize} cards`);
+    });
+  }
+};
 
-            console.log('SOCKET DEBUG: Cleaned up socket event handlers');
-
-            if (gameIdRef.current) {
-                socketService.leaveGameRoom(gameIdRef.current);
-            }
-
-            socketService.disconnectSocket();
-        };
-    }, []);
-
-    // Function to manually trigger a sync with the server (not used in WebSocket-only)
-    const syncState = async () => {
-      return;
-    };
-
-    const initialize = (gameState: GameState, dispatch: any, dispatchUI: any) => {
-        gameIdRef.current = gameState.id;
-        gameStateRef.current = gameState;
-        dispatchRef.current = dispatch;
-        dispatchUIRef.current = dispatchUI;
-
-        // Connect after initializing
-        const socket = socketService.initSocket();
-        if (!socket.connected) {
-          socket.connect();
-        }
+// Set up all event handlers for socket events
+const setupEventHandlers = () => {
+  // Handle connection state changes
+  const connectionStateSubscription = connectionManager.getConnectionState().subscribe(state => {
+    handleConnectionStateChange(state);
+  });
+  
+  // Handle game state updates
+  const gameStateUnsubscribe = socketService.onGameStateUpdate(handleGameStateUpdate);
+  
+  // Handle game started events using the connection manager
+  const gameStartedUnsubscribe = connectionManager.addEventListener('game-started', handleGameStarted);
+  
+  // Handle streaming events
+  const streamStartUnsubscribe = socketService.onLLMStreamStart(handleStreamStart);
+  const streamChunkUnsubscribe = socketService.onLLMStreamChunk(handleStreamChunk);
+  const streamEndUnsubscribe = socketService.onLLMStreamEnd(handleStreamEnd);
+  const streamErrorUnsubscribe = socketService.onLLMStreamError(handleStreamError);
+  
+  // Handle action received events
+  const actionReceivedUnsubscribe = socketService.onActionReceived((data) => {
+    console.log("action-received", data);
+  });
+  
+  // Return cleanup function
+  return () => {
+    connectionStateSubscription.unsubscribe();
+    gameStateUnsubscribe();
+    gameStartedUnsubscribe(); // Using the proper unsubscribe function
+    actionReceivedUnsubscribe();
+    streamStartUnsubscribe();
+    streamChunkUnsubscribe();
+    streamEndUnsubscribe();
+    streamErrorUnsubscribe();
+    
+    if (gameId) {
+      socketService.leaveGameRoom(gameId);
     }
+    
+    socketService.disconnectSocket();
+  };
+};
 
-    return {
-        isConnected,
-        lastSyncTime,
-        syncState,
-        sendAction,
-        streamingState,
-        initialize
+// Initialize the game sync
+const initialize = (gameState: GameState, dispatch: any, dispatchUI: any) => {
+  // Set the game ID first and log it
+  gameId = gameState.id;
+  console.log(`Initializing game sync with game ID: ${gameId}`);
+  
+  // Only set dispatch functions if they're provided
+  if (dispatch) dispatchFn = dispatch;
+  if (dispatchUI) dispatchUIFn = dispatchUI;
+  
+  // Connect after initializing
+  const socket = socketService.initSocket();
+  if (!socket.connected) {
+    socket.connect();
+  }
+  
+  // Clean up any existing handlers
+  if (cleanupHandlers) {
+    cleanupHandlers();
+  }
+  
+  // Set up event handlers
+  cleanupHandlers = setupEventHandlers();
+  
+  // Join the game room if we have a game ID
+  if (gameId) {
+    console.log(`Joining game room for game ID: ${gameId}`);
+    socketService.joinGameRoom(gameId, '');
+  }
+};
+
+// Function to manually trigger a sync with the server (not used in WebSocket-only)
+const syncState = async () => {
+  return;
+};
+
+// Export the game sync functions
+export const gameSync = {
+  sendAction,
+  syncState,
+  initialize,
+  get connectionState() {
+    // Access the current connection state from the connection manager
+    return connectionManager.getCurrentState();
+  },
+  get streamingState() {
+    // Access the current streaming state from the stream processor
+    return streamProcessor.getCurrentState();
+  }
+};
+
+/**
+ * Custom hook for using game sync in React components
+ * This provides reactive state updates when connection or streaming state changes
+ */
+function useGameSync() {
+  // Get reactive connection state
+  const connectionState = useSubscription(
+    connectionManager.getConnectionState(), 
+    'disconnected'
+  );
+  
+  // Get reactive streaming state
+  const streamingState = useSubscription(
+    streamProcessor.getStreamingState(), 
+    {
+      isStreaming: false,
+      streamContent: '',
+      streamComplete: false
+    }
+  );
+  
+  // Clean up when component unmounts
+  useEffect(() => {
+    return () => {
+      if (cleanupHandlers) {
+        cleanupHandlers();
+      }
     };
+  }, []);
+  
+  // Return the gameSync object plus reactive state
+  return {
+    ...gameSync,
+    connectionState,
+    streamingState
+  };
 }
 
-// Export a singleton instance
-export const gameSync = createGameSync();
+export default useGameSync;

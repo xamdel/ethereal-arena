@@ -1,9 +1,9 @@
 'use client';
 
-import { createContext, useContext, useReducer, ReactNode, useState, useEffect } from 'react';
-import { GameState, GameAction, ActionType, Card } from '@/types';
+import { createContext, useContext, useReducer, ReactNode, useEffect } from 'react';
+import { GameState, GameAction, ActionType, Card, Player } from '@/types';
 import { v4 as uuidv4 } from 'uuid';
-import { gameSync } from '@/hooks/useGameSync';
+import useGameSync, { gameSync } from '@/hooks/useGameSync';
 
 // Initial empty game state
 const initialGameState: GameState = {
@@ -387,16 +387,21 @@ function uiStateReducer(state: UIState, action: any): UIState {
 interface GameContextType {
   gameState: GameState;
   uiState: UIState;
-  dispatch: (action: GameAction) => void;
-  dispatchUI: (action: any) => void;
+  dispatch: (action: GameAction) => Promise<any>;
+  dispatchUI: (action: GameUIAction) => void;
   isCurrentPlayerActive: () => boolean;
-  getCurrentPlayer: () => any | null;
-  getOpponent: () => any | null;
+  getCurrentPlayer: () => Player | null;
+  getOpponent: () => Player | null;
   canPlayCard: (cardId: string) => boolean;
   calculateCardEnergyCost: (cardId: string) => Promise<void>;
   clearCardEnergyCosts: () => void;
   getCardEnergyCost: (cardId: string) => { canPlay: boolean; energyCost: number; reason: string } | null;
-  connectionState: "connected" | "connecting" | "disconnected";
+  connectionState: "connected" | "disconnected" | "reconnecting";
+}
+
+interface GameUIAction {
+  type: string;
+  payload: any;
 }
 
 // Create the context
@@ -406,12 +411,13 @@ const GameContext = createContext<GameContextType | undefined>(undefined);
 export function GameProvider({ children }: { children: ReactNode }) {
   const [gameState, dispatch] = useReducer(gameStateReducer, initialGameState);
   const [uiState, dispatchUI] = useReducer(uiStateReducer, initialUIState);
-    const [connectionState, setConnectionState] = useState<"connected" | "connecting" | "disconnected">("connecting");
-
-    useEffect(() => {
-        gameSync.initialize(gameState, dispatch, dispatchUI);
-        gameSync.isConnected ? setConnectionState("connected") : setConnectionState("disconnected")
-    }, []);
+  
+  // Initialize game sync once on mount, not on every render
+  useEffect(() => {
+    // Only initialize with the initial state, not the current state
+    // to avoid re-initializing on every state change
+    gameSync.initialize(initialGameState, dispatch, dispatchUI);
+  }, []);
   
   // Client/server adapter function
     const dispatchAction = async (action: GameAction) => {
@@ -520,30 +526,46 @@ export function GameProvider({ children }: { children: ReactNode }) {
     };
   };
   
-  // Calculate energy cost for a card (calls LLM API)
+  // Calculate energy cost for a card (using WebSocket)
   const calculateCardEnergyCost = async (cardId: string) => {
-    // Get player data
+    // Get player data and capture all necessary values to avoid reference closure issues
     const player = getCurrentPlayer();
-    if (!player || !gameState.id) {
+    const currentGameId = gameState.id;
+    
+    if (!player || !currentGameId) {
       return;
     }
     
-    // Find the card
+    // Find the card and store relevant info locally
     const card = player.hand.find(c => c.id === cardId);
     if (!card) {
       return;
     }
     
+    // Store player details needed for fallback
+    const playerEnergy = player.energy;
+    const cardBaseCost = card.cost;
+    const playerId = player.id;
+    
     try {
-      // Import the API module
-      const { calculateCardEnergyCost } = await import('@/services/api');
+      // Import socket for sending WebSocket action
+      const { sendGameAction } = await import('@/services/socket');
       
-      // Call the API to calculate cost
-      console.log(`Calculating energy cost for card ${cardId}...`);
-      const result = await calculateCardEnergyCost(
-        gameState.id,
-        cardId,
-        player.id
+      // Send a specific action to calculate the energy cost via WebSocket
+      console.log(`Calculating energy cost for card ${cardId} via WebSocket...`);
+      const result = await sendGameAction(
+        currentGameId,
+        {
+          id: `energy-cost-${cardId}-${Date.now()}`,
+          type: "CALCULATE_CARD_COST", // Custom action type for energy calculation
+          playerId: playerId,
+          payload: {
+            cardId
+          },
+          timestamp: Date.now(),
+          gameId: currentGameId,
+          validated: false
+        }
       );
       
       console.log(`Energy cost calculation result:`, result);
@@ -565,8 +587,8 @@ export function GameProvider({ children }: { children: ReactNode }) {
         type: 'UPDATE_CARD_ENERGY_COST',
         payload: {
           cardId,
-          canPlay: player.energy >= card.cost,
-          energyCost: card.cost,
+          canPlay: playerEnergy >= cardBaseCost,
+          energyCost: cardBaseCost,
           reason: "Using base cost (calculation failed)"
         }
       });
@@ -575,13 +597,33 @@ export function GameProvider({ children }: { children: ReactNode }) {
   
   // Clear all cached energy cost calculations
   const clearCardEnergyCosts = async () => {
+    // Clear the UI state first
     dispatchUI({ type: 'CLEAR_CARD_ENERGY_COSTS' });
     
+    // Store necessary values to avoid referencing gameState in closure
+    const currentGameId = gameState.id;
+    const currentPlayer = getCurrentPlayer();
+    
     // Also clear on the server if a game is active
-    if (gameState.id && getCurrentPlayer()) {
+    // But only if this was triggered by a user action, not by a game state update
+    if (currentGameId && currentPlayer && !gameState.actionHistory.some(action => 
+      action.type === ActionType.GAME_INIT && 
+      action.timestamp > Date.now() - 1000)) {
       try {
-        const { clearCardEnergyCostCache } = await import('@/services/api');
-        await clearCardEnergyCostCache(gameState.id, getCurrentPlayer().id);
+        // Use WebSocket to clear cost cache
+        const { sendGameAction } = await import('@/services/socket');
+        await sendGameAction(
+          currentGameId,
+          {
+            id: `clear-energy-cost-${Date.now()}`,
+            type: "CLEAR_CARD_COST_CACHE",
+            playerId: currentPlayer.id,
+            payload: {},
+            timestamp: Date.now(),
+            gameId: currentGameId,
+            validated: false
+          }
+        );
       } catch (error) {
         console.error("Error clearing card energy cost cache:", error);
       }
@@ -601,13 +643,37 @@ export function GameProvider({ children }: { children: ReactNode }) {
     }
   }, [gameState.isMultiplayer]);
   
-  // Clear cache when game state changes
+  // Clear cache when game state changes - but only for local actions, not server updates
   useEffect(() => {
-    // When an action is played, clear the energy cost cache
-    clearCardEnergyCosts();
+    // Store the current length of action history to avoid reference issues
+    const actionHistoryLength = gameState.actionHistory.length;
+    
+    // Only clear cache if we have actions in the history (avoid first render)
+    if (actionHistoryLength > 0) {
+      // Get the most recent action
+      const lastAction = gameState.actionHistory[actionHistoryLength - 1];
+      
+      // Only clear cache if this is a local action (not a server state update)
+      // Skip GAME_INIT actions to avoid the infinite loop
+      if (lastAction && lastAction.type !== ActionType.GAME_INIT) {
+        // Use setTimeout to break the potential render cycle
+        const timer = setTimeout(() => {
+          // Clear UI state cache of energy costs (but don't send to server)
+          dispatchUI({ type: 'CLEAR_CARD_ENERGY_COSTS' });
+        }, 0);
+        
+        return () => clearTimeout(timer);
+      }
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [gameState.actionHistory.length]);
 
+  // Use the new gameSync hook for reactive state
+  const { connectionState: rawConnectionState } = useGameSync();
+  const connectionState = rawConnectionState === 'reconnecting' 
+    ? 'reconnecting' 
+    : rawConnectionState;
+    
   return (
     <GameContext.Provider
       value={{

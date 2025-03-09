@@ -4,6 +4,7 @@ import { useGame } from '@/context';
 import { Card, GameAction, ActionType } from '@/types';
 import { v4 as uuidv4 } from 'uuid';
 import { gameSync } from '../hooks/useGameSync';
+import { useCallback } from 'react';
 
 /**
  * Custom hook with game action creators
@@ -12,6 +13,7 @@ import { gameSync } from '../hooks/useGameSync';
 export function useGameActions() {
   const { 
     gameState,
+    dispatch,
     dispatchUI,
     calculateCardEnergyCost,
     clearCardEnergyCosts,
@@ -22,10 +24,10 @@ export function useGameActions() {
   let actionSequenceNumber = 0;
 
   // Generate a unique action ID with a sequence number
-  const generateActionId = (): string => {
+  const generateActionId = useCallback((): string => {
     actionSequenceNumber++;
     return `${uuidv4()}-${actionSequenceNumber}`;
-  };
+  }, []);
 
   // Initialize a new game
   const initGame = (isSinglePlayer: boolean = true, useMockData: boolean = true): Promise<void> => {
@@ -78,16 +80,18 @@ export function useGameActions() {
 
             console.log(`Game created with ID: ${gameId}`);
 
-            // Now start the game using gameSync
-            await gameSync.sendAction({
-              type: 'start-game',
-              gameId: gameId,
-              playerId: playerId,
-              payload: {},
-              timestamp: Date.now(),
-              id: generateActionId(),
-              validated: false,
-            });
+            // Initialize the game sync with the game state to set up event listeners
+            // Use actual dispatch functions so the game state will be updated when
+            // we receive the 'game-started' event with the cards
+            gameSync.initialize({...gameState, id: gameId}, dispatch, dispatchUI);
+            
+            // Start the game using the socket's 'start-game' event
+            // This will trigger the server's dedicated start game handler that generates cards
+            const socketService = await import('@/services/socket');
+            const result = await socketService.startGame(gameId, playerId);
+            
+            // Log for debugging
+            console.log('Game started with cards:', result.gameState?.players[playerId]?.hand?.length || 0);
 
             resolve();
           } catch (error) {
@@ -146,7 +150,7 @@ export function useGameActions() {
   };
 
   // Play a card
-  const playCard = async (cardId: string, targetPlayerId?: string) => {
+  const playCard = useCallback(async (cardId: string, targetPlayerId?: string) => {
     console.log('[Debug] Starting playCard function with:', { cardId, targetPlayerId });
     
     // Validate game state before proceeding
@@ -239,7 +243,7 @@ export function useGameActions() {
 
       // Clear the energy cost cache since the state has changed
       clearCardEnergyCosts();
-} catch (error) {
+    } catch (error) {
       console.error('Error playing card:', error);
       dispatchUI({
         type: 'SET_ERROR',
@@ -251,10 +255,10 @@ export function useGameActions() {
         payload: { isProcessing: false }
       });
     }
-};
+  }, [gameState, dispatchUI, generateActionId, getCardEnergyCost, clearCardEnergyCosts]);
 
   // End the current turn
-  const endTurn = async () => {
+  const endTurn = useCallback(async () => {
     try {
       dispatchUI({ 
         type: 'SET_PROCESSING', 
@@ -289,7 +293,7 @@ export function useGameActions() {
         payload: { isProcessing: false } 
       });
     }
-  };
+  }, [gameState, dispatchUI, generateActionId]);
 
   // Select a card from hand (UI action)
   const selectCard = async (cardId: string) => {
