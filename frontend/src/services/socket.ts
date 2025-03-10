@@ -35,6 +35,11 @@ const RECONNECT_MULTIPLIER = 1.5;
 function processMessageQueue() {
   if (connectionManager.getCurrentState() === "connected" && messageQueue.length > 0) {
     const message = messageQueue.shift();
+    console.log(`[DEBUG] Processing queued message for ${message.action.type}`, {
+      correlationId: message.action.correlationId,
+      isStreamAction: message.isStreamAction
+    });
+    
     sendActionWithAck(
       message.action, 
       message.gameId, 
@@ -152,11 +157,19 @@ export const leaveGameRoom = (gameId: string): void => {
 };
 
 /**
- * Start a game using the socket 'start-game' event
- * @param gameId The game ID to start
+ * Create and start a game using the socket 'start-game' event
+ * This combines the functionality of the former createGame API and startGame
+ * @param gameId The temporary game ID (will be replaced by server-generated ID)
  * @param playerId The player ID initiating the start
+ * @param playerName Optional player name (defaults to 'Player')
+ * @param isSinglePlayer Whether this is a single-player game (defaults to true)
  */
-export const startGame = (gameId: string, playerId: string): Promise<any> => {
+export const startGame = (
+  gameId: string, 
+  playerId: string, 
+  playerName: string = 'Player', 
+  isSinglePlayer: boolean = true
+): Promise<any> => {
   return new Promise((resolve, reject) => {
     if (!socket) {
       socket = initSocket();
@@ -193,11 +206,70 @@ export const startGame = (gameId: string, playerId: string): Promise<any> => {
     // Listen for the response using connection manager
     connectionManager.addEventListener('game-started', onGameStarted);
     
-    // Send the start-game event
-    console.log(`Sending start-game event for game ${gameId}`);
+    // Send the start-game event with all necessary params for game creation
+    console.log(`Sending start-game event for new game with player ${playerId}`);
     socket.emit('start-game', {
       gameId,
       playerId,
+      playerName,
+      isSinglePlayer,
+      correlationId
+    });
+  });
+};
+
+/**
+ * Join an existing game
+ * @param gameId The game to join
+ * @param playerId The player's ID
+ * @param playerName The player's name
+ */
+export const joinGame = (
+  gameId: string, 
+  playerId: string, 
+  playerName: string
+): Promise<any> => {
+  return new Promise((resolve, reject) => {
+    if (!socket) {
+      socket = initSocket();
+      if (!socket.connected) {
+        socket.connect();
+      }
+    }
+    
+    const correlationId = generateUUID();
+    const timeoutDuration = ACK_TIMEOUT;
+    
+    // Function to handle game join events
+    const onGameJoined = (data: any) => {
+      if (data.correlationId === correlationId) {
+        connectionManager.removeEventListener('game-joined', onGameJoined);
+        clearTimeout(timeout);
+        
+        console.log('Joined game successfully:', {
+          gameId: data.gameState.id,
+          playerCount: Object.keys(data.gameState.players).length
+        });
+        
+        resolve(data);
+      }
+    };
+    
+    // Set timeout to avoid hanging forever
+    const timeout = setTimeout(() => {
+      connectionManager.removeEventListener('game-joined', onGameJoined);
+      reject(new Error(`Join game request timed out after ${timeoutDuration}ms`));
+    }, timeoutDuration);
+    
+    // Listen for the response
+    connectionManager.addEventListener('game-joined', onGameJoined);
+    
+    // Send the join-game event with player info
+    console.log(`Sending join-game event for game ${gameId}`);
+    socket.emit('join-game', {
+      gameId,
+      playerId,
+      playerName,
       correlationId
     });
   });
@@ -225,6 +297,15 @@ export const sendGameAction = (
   options: { streamResponse?: boolean } = {}
 ): Promise<any> => {
   return new Promise((resolve, reject) => {
+    // Log the gameId for debugging
+    console.log(`Sending game action to gameId: ${gameId}`);
+    
+    // Check if socket has a different gameId stored in socket.data
+    if (socket?.data?.gameId && socket.data.gameId !== gameId) {
+      console.warn(`Socket has different gameId (${socket.data.gameId}) than provided (${gameId}). Using socket's gameId.`);
+      gameId = socket.data.gameId;
+    }
+    
     sendActionWithAck(action, gameId, resolve, reject, options.streamResponse);
   });
 };
@@ -245,9 +326,22 @@ const sendActionWithAck = (
   
   const timeoutDuration = isStreamAction ? STREAM_TIMEOUT : ACK_TIMEOUT;
 
+  console.log(`[DEBUG] sendActionWithAck: ${action.type}`, { 
+    correlationId,
+    isStreamAction,
+    timeoutDuration,
+    actionPayload: action.payload
+  });
+
   const timeout = setTimeout(() => {
     const pendingAction = pendingActions.get(correlationId);
     if (pendingAction) {
+      console.log(`[DEBUG] Action timed out after ${timeoutDuration}ms`, { 
+        correlationId,
+        actionType: action.type,
+        isStreamAction,
+        pendingActionsSize: pendingActions.size
+      });
       pendingActions.delete(correlationId);
       reject(new Error(`Action timed out after ${timeoutDuration}ms`));
     }
@@ -260,9 +354,32 @@ const sendActionWithAck = (
     isStreamAction
   });
 
+  console.log(`[DEBUG] Added pendingAction for ${action.type}`, { 
+    correlationId,
+    isStreamAction,
+    pendingActionsSize: pendingActions.size
+  });
+
   if (connectionManager.getCurrentState() === "connected" && socket?.connected) {
-    socket.emit('game-action', { gameId, action, correlationId });
+    console.log(`[DEBUG] Emitting game-action event for ${action.type}`, { 
+      correlationId,
+      connectionState: connectionManager.getCurrentState(),
+      isStreamAction
+    });
+    
+    // Pass the streamResponse flag directly to the server
+    socket.emit('game-action', { 
+      gameId, 
+      action, 
+      correlationId,
+      streamResponse: isStreamAction 
+    });
   } else {
+    console.log(`[DEBUG] Adding to message queue - not connected`, { 
+      correlationId,
+      connectionState: connectionManager.getCurrentState(),
+      queueLength: messageQueue.length
+    });
     messageQueue.push({ action, gameId, resolve, reject, isStreamAction });
     if (connectionManager.getCurrentState() !== "reconnecting") {
       handleReconnection();
@@ -281,20 +398,38 @@ function registerSocketEvent<T>(
   }
   
   const eventHandler = (data: T & { correlationId?: string }) => {
+    console.log(`[DEBUG] Socket event received: ${event}`, { 
+      hasCorrelationId: !!data.correlationId,
+      correlationId: data.correlationId,
+      eventType: event,
+      isPendingAction: data.correlationId ? pendingActions.has(data.correlationId) : false
+    });
+
     // If the event contains a correlationId, resolve the corresponding pending action
     if (handleCorrelation && data.correlationId) {
       const pendingAction = pendingActions.get(data.correlationId);
       if (pendingAction) {
+        console.log(`[DEBUG] Found pending action for correlationId: ${data.correlationId}`, { 
+          isStreamAction: pendingAction.isStreamAction,
+          eventType: event
+        });
+        
         // For streaming actions, we only resolve on stream-end
         if (!pendingAction.isStreamAction || event === 'llm-stream-end') {
+          console.log(`[DEBUG] Resolving promise for correlationId: ${data.correlationId}`);
           clearTimeout(pendingAction.timeout);
           pendingActions.delete(data.correlationId);
           pendingAction.resolve(data);
         } else if (event === 'llm-stream-error') {
+          console.log(`[DEBUG] Rejecting promise for correlationId: ${data.correlationId} due to stream error`);
           clearTimeout(pendingAction.timeout);
           pendingActions.delete(data.correlationId);
           pendingAction.reject(new Error((data as any).message));
+        } else {
+          console.log(`[DEBUG] Not resolving promise yet for correlationId: ${data.correlationId} (waiting for llm-stream-end)`);
         }
+      } else {
+        console.log(`[DEBUG] No pending action found for correlationId: ${data.correlationId}`);
       }
     }
     

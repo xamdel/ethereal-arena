@@ -56,9 +56,9 @@ export function useGameActions() {
     
             resolve();
         }
-    else {
-      // For real backend connection, we need to create a game via API
-      const playerId = generateActionId();
+        else {
+          // For real backend connection, we create and start a game via WebSockets
+          const playerId = generateActionId();
           
           // Set UI to loading state
           dispatchUI({ 
@@ -66,29 +66,36 @@ export function useGameActions() {
             payload: { isProcessing: true } 
           });
           
-          // Import and use the API service
-          const { createGame } = await import('@/services/api');
-
           try {
-            // Call the backend API to create a new game
+            // Create and initialize a new WebSocket game session
             console.log(`Creating new game for player ${playerId}`);
-            const { gameId, gameState } = await createGame(
-              playerId,
-              'Player', // Default player name
-              isSinglePlayer
-            );
-
-            console.log(`Game created with ID: ${gameId}`);
-
-            // Initialize the game sync with the game state to set up event listeners
-            // Use actual dispatch functions so the game state will be updated when
-            // we receive the 'game-started' event with the cards
-            gameSync.initialize({...gameState, id: gameId}, dispatch, dispatchUI);
+            
+            // Initialize socket connection with a temporary game state
+            const tempGameId = generateActionId();
+            console.log(`Creating temporary game ID: ${tempGameId}`);
+            
+            // Initialize game sync with the temporary game state
+            gameSync.initialize({
+              id: tempGameId,
+              players: {},
+              activePlayerId: '',
+              turnNumber: 0,
+              phase: 'init',
+              effectQueue: [],
+              actionHistory: [],
+              turnStartTime: Date.now(),
+              lastUpdateTime: Date.now(),
+              winner: null,
+              isMultiplayer: !isSinglePlayer
+            }, dispatch, dispatchUI);
+            
+            // Use socket to create and start the game
+            const socketService = await import('@/services/socket');
             
             // Start the game using the socket's 'start-game' event
-            // This will trigger the server's dedicated start game handler that generates cards
-            const socketService = await import('@/services/socket');
-            const result = await socketService.startGame(gameId, playerId);
+            // This will trigger the server's dedicated start game handler that creates the game and generates cards
+            // Note: gameSync.handleGameStarted will update the internal gameId to match the server's ID
+            const result = await socketService.startGame(tempGameId, playerId);
             
             // Log for debugging
             console.log('Game started with cards:', result.gameState?.players[playerId]?.hand?.length || 0);
@@ -226,6 +233,7 @@ export function useGameActions() {
         }
       }
       // Using dispatch to trigger the updated server communication flow
+      console.log("[DEBUG] Sending PLAY_CARD action with streamResponse");
       await gameSync.sendAction({
         id: generateActionId(),
         type: ActionType.PLAY_CARD,
@@ -233,6 +241,7 @@ export function useGameActions() {
         payload: {
           cardId,
           targetPlayerId,
+          streamResponse: true // Moving streamResponse into the payload for server handling
         },
         timestamp: Date.now(),
         gameId: gameState.id,
@@ -249,12 +258,14 @@ export function useGameActions() {
         type: 'SET_ERROR',
         payload: { message: 'Failed to play card. Please try again.' }
       });
-    } finally {
+      // Error state should still clear the processing state
       dispatchUI({
         type: 'SET_PROCESSING',
         payload: { isProcessing: false }
       });
     }
+    // Removed the finally block that was setting processing to false
+    // The processing state will be cleared when the stream ends in handleStreamEnd
   }, [gameState, dispatchUI, generateActionId, getCardEnergyCost, clearCardEnergyCosts]);
 
   // End the current turn

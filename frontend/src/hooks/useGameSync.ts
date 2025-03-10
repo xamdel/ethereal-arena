@@ -176,6 +176,13 @@ const handleStreamEnd = (data: {
   timestamp: number;
   correlationId: string;
 }) => {
+  console.log(`[DEBUG] handleStreamEnd received:`, {
+    cardId: data.cardId,
+    playerId: data.playerId,
+    timestamp: data.timestamp,
+    correlationId: data.correlationId
+  });
+  
   // Use stream processor to handle stream end
   const parsed = streamProcessor.handleStreamEnd(data);
   
@@ -186,6 +193,7 @@ const handleStreamEnd = (data: {
   
   // Update UI state to show streaming complete
   if (dispatchUIFn) {
+    console.log(`[DEBUG] Setting streaming state to false in handleStreamEnd`);
     dispatchUIFn({
       type: 'SET_STREAMING',
       payload: {
@@ -196,10 +204,13 @@ const handleStreamEnd = (data: {
     });
     
     // Turn off processing state since streaming is complete
+    console.log(`[DEBUG] Setting processing state to false in handleStreamEnd`);
     dispatchUIFn({
       type: 'SET_PROCESSING',
       payload: { isProcessing: false }
     });
+  } else {
+    console.log(`[DEBUG] dispatchUIFn is not available in handleStreamEnd`);
   }
 };
 
@@ -250,6 +261,10 @@ const handleGameStarted = (data: { gameState: GameState, correlationId: string }
   
   // Dispatch the game state update
   if (data.gameState && dispatchFn) {
+    // Update the module-level gameId to the server-generated ID
+    gameId = data.gameState.id;
+    console.log(`Updated gameId to server-generated ID: ${gameId}`);
+    
     dispatchFn({
       type: ActionType.GAME_INIT,
       payload: data.gameState,
@@ -342,15 +357,9 @@ const initialize = (gameState: GameState, dispatch: any, dispatchUI: any) => {
   }
 };
 
-// Function to manually trigger a sync with the server (not used in WebSocket-only)
-const syncState = async () => {
-  return;
-};
-
 // Export the game sync functions
 export const gameSync = {
   sendAction,
-  syncState,
   initialize,
   get connectionState() {
     // Access the current connection state from the connection manager

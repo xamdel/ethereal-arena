@@ -549,11 +549,34 @@ export function GameProvider({ children }: { children: ReactNode }) {
     
     try {
       // Import socket for sending WebSocket action
-      const { sendGameAction } = await import('@/services/socket');
+      const { sendGameAction, onActionReceived } = await import('@/services/socket');
+      
+      // Generate a correlation ID for this request
+      const correlationId = `energy-cost-${cardId}-${Date.now()}`;
+      
+      // Create a promise to handle the async response
+      const responsePromise = new Promise((resolve, reject) => {
+        // Set up a one-time listener for the response
+        const unsubscribe = onActionReceived((data) => {
+          // Check if this is the response to our request
+          if (data.correlationId === correlationId && data.cardId === cardId) {
+            // Clean up the listener
+            unsubscribe();
+            // Resolve with the cost calculation result
+            resolve(data);
+          }
+        });
+        
+        // Set a timeout to reject the promise if we don't get a response
+        setTimeout(() => {
+          unsubscribe();
+          reject(new Error("Card cost calculation timed out"));
+        }, 10000); // 10 second timeout
+      });
       
       // Send a specific action to calculate the energy cost via WebSocket
       console.log(`Calculating energy cost for card ${cardId} via WebSocket...`);
-      const result = await sendGameAction(
+      await sendGameAction(
         currentGameId,
         {
           id: `energy-cost-${cardId}-${Date.now()}`,
@@ -564,10 +587,13 @@ export function GameProvider({ children }: { children: ReactNode }) {
           },
           timestamp: Date.now(),
           gameId: currentGameId,
-          validated: false
+          validated: false,
+          correlationId: correlationId
         }
       );
       
+      // Wait for the response
+      const result = await responsePromise;
       console.log(`Energy cost calculation result:`, result);
       
       // Update UI state with the calculation
@@ -611,7 +637,32 @@ export function GameProvider({ children }: { children: ReactNode }) {
       action.timestamp > Date.now() - 1000)) {
       try {
         // Use WebSocket to clear cost cache
-        const { sendGameAction } = await import('@/services/socket');
+        const { sendGameAction, onActionReceived } = await import('@/services/socket');
+        
+        // Generate a correlation ID for this request
+        const correlationId = `clear-cost-${Date.now()}`;
+        
+        // Create a promise to handle the async response
+        const responsePromise = new Promise((resolve, reject) => {
+          // Set up a one-time listener for the response
+          const unsubscribe = onActionReceived((data) => {
+            // Check if this is the response to our request
+            if (data.correlationId === correlationId) {
+              // Clean up the listener
+              unsubscribe();
+              // Resolve with the result
+              resolve(data);
+            }
+          });
+          
+          // Set a timeout to reject the promise if we don't get a response
+          setTimeout(() => {
+            unsubscribe();
+            reject(new Error("Clear cost cache timed out"));
+          }, 5000); // 5 second timeout
+        });
+        
+        // Send the action
         await sendGameAction(
           currentGameId,
           {
@@ -621,9 +672,13 @@ export function GameProvider({ children }: { children: ReactNode }) {
             payload: {},
             timestamp: Date.now(),
             gameId: currentGameId,
-            validated: false
+            validated: false,
+            correlationId: correlationId
           }
         );
+        
+        // Wait for the response
+        await responsePromise;
       } catch (error) {
         console.error("Error clearing card energy cost cache:", error);
       }

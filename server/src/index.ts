@@ -3,7 +3,6 @@ import http from 'http';
 import cors from 'cors';
 import { Server } from 'socket.io';
 import dotenv from 'dotenv';
-import apiRoutes from './routes/api';
 import llmApiRoutes from './routes/llm-api';
 import { Socket } from 'socket.io';
 import { GameAction } from './types';
@@ -34,13 +33,12 @@ app.use(cors({
 }));
 app.use(express.json());
 
-// Routes
-app.use('/api', apiRoutes);
+// Routes - only keep the LLM API routes which are still needed
 app.use('/api/llm', llmApiRoutes);
 
 // Root route
 app.get('/', (req, res) => {
-  res.json({ message: 'Ethereal Arena Game Server' });
+  res.json({ message: 'Ethereal Arena Game Server (WebSocket Mode)' });
 });
 
 // Socket.io connection handling
@@ -49,30 +47,81 @@ io.on('connection', (socket) => {
   
   // Join a game room
   socket.on('join-game', (data) => {
-    const { gameId, playerId } = data;
+    const { gameId, playerId, playerName, correlationId } = data;
     
     if (!gameId) {
       socket.emit('error', { message: 'Game ID is required' });
       return;
     }
     
-    socket.join(gameId);
-    console.log(`Client ${socket.id} joined game: ${gameId}`);
-    
-    // Store the player ID in the socket data
-    socket.data.playerId = playerId;
-    socket.data.gameId = gameId;
-    
-    // Notify other players in the room
-    socket.to(gameId).emit('player-joined', { 
-      socketId: socket.id,
-      playerId: playerId
-    });
+    // If we have playerName, this is a full join operation (not just a reconnect)
+    if (playerName && playerId) {
+      try {
+        console.log(`Client ${socket.id} joining existing game: ${gameId} as player ${playerId} (${playerName})`);
+        
+        // Add the player to the game session
+        const { addPlayerToSession } = require('./game-engine/game-session-manager');
+        const updatedSession = addPlayerToSession(gameId, playerId, playerName);
+        
+        if (!updatedSession) {
+          socket.emit('error', { message: 'Game not found or cannot join' });
+          return;
+        }
+        
+        socket.join(gameId);
+        
+        // Store the player ID in the socket data
+        socket.data.playerId = playerId;
+        socket.data.gameId = gameId;
+        
+        // Notify all clients about the joined player
+        io.to(gameId).emit('player-joined', { 
+          socketId: socket.id,
+          playerId: playerId,
+          playerName: playerName
+        });
+        
+        // Send the updated game state to the joining client
+        socket.emit('game-joined', {
+          gameState: updatedSession.gameState,
+          correlationId: correlationId
+        });
+        
+        // Broadcast updated game state to all players
+        io.to(gameId).emit('game-state-update', {
+          gameState: updatedSession.gameState,
+          correlationId: correlationId
+        });
+      }
+      catch (error) {
+        console.error(`[Socket.IO] Error joining game:`, error);
+        socket.emit('error', {
+          message: error instanceof Error ? error.message : 'Unknown error joining game'
+        });
+      }
+    }
+    // Simple room join (for reconnections)
+    else {
+      socket.join(gameId);
+      console.log(`Client ${socket.id} reconnected to game: ${gameId}`);
+      
+      // Store the player ID in the socket data
+      if (playerId) {
+        socket.data.playerId = playerId;
+        socket.data.gameId = gameId;
+        
+        // Notify other players in the room
+        socket.to(gameId).emit('player-joined', { 
+          socketId: socket.id,
+          playerId: playerId
+        });
+      }
+    }
   });
   
   // Handle game actions
   socket.on('game-action', async (data) => {
-    const { gameId, action } = data;
+    const { gameId, action, streamResponse } = data;
     
     if (!gameId || !action) {
       socket.emit('error', { message: 'Invalid action data' });
@@ -82,10 +131,50 @@ io.on('connection', (socket) => {
     try {
       console.log(`[Socket.IO] Received ${action.type} action for game ${gameId}`);
       
+      // Store streamResponse flag in socket data for access in action handlers
+      if (streamResponse === true || action.payload?.streamResponse === true) {
+        console.log(`[DEBUG] Setting streamResponse flag on socket data`);
+        socket.data.streamResponse = true;
+      }
+      
+      // Special handling for CALCULATE_CARD_COST action
+      if (action.type === "CALCULATE_CARD_COST") {
+        await handleCardCostCalculation(socket, gameId, action);
+      }
+      // Handle clearing card cost cache
+      else if (action.type === "CLEAR_CARD_COST_CACHE") {
+        await handleClearCardCostCache(socket, gameId, action);
+      }
       // Check if this is a card play action with streaming enabled
-      if (action.type === 'PLAY_CARD' && action.payload?.streamResponse === true) {
-        // Handle streaming card play
-        await handleStreamingCardPlay(socket, gameId, action);
+      else if (action.type === 'PLAY_CARD') {
+        console.log(`[DEBUG] Checking PLAY_CARD for streaming:`, {
+          hasStreamResponse: !!action.payload?.streamResponse,
+          hasSocketData: !!socket.data.streamResponse,
+          hasGameAction: !!data.streamResponse
+        });
+        
+        // Handle streaming card play - check both places where streamResponse might be set
+        if (action.payload?.streamResponse === true || data.streamResponse === true) {
+          await handleStreamingCardPlay(socket, gameId, action);
+        } else {
+          console.log(`[DEBUG] PLAY_CARD without streaming flag, using normal processing`);
+          const result = await processAction(gameId, action);
+          
+          if (!result.session) {
+            console.error(`[Socket.IO] Error processing action: ${result.error}`);
+            socket.emit('error', { 
+              message: result.error || 'Failed to process action' 
+            });
+            return;
+          }
+          
+          // Broadcast the updated game state to all clients in the room
+          io.to(gameId).emit('game-state-update', {
+            gameState: result.session.gameState,
+            action: action,
+            correlationId: action.correlationId
+          });
+        }
       } else {
         // Process the action using the imported processAction function
         const result = await processAction(gameId, action);
@@ -115,37 +204,49 @@ io.on('connection', (socket) => {
     }
   });
 
-    // Handle start game request
+    // Handle create and start game request
     socket.on('start-game', async (data) => {
-      const { gameId } = data;
+      const { gameId, playerId, playerName = 'Player', isSinglePlayer = true, correlationId } = data;
     
-    if (!gameId) {
-      socket.emit('error', { message: 'Game ID is required' });
+    if (!gameId || !playerId) {
+      socket.emit('error', { message: 'Game ID and Player ID are required' });
       return;
     }
     
     try {
-      console.log(`[Socket.IO] Starting game ${gameId}`);
+      console.log(`[Socket.IO] Creating and starting game for player ${playerId} (${playerName})`);
+      
+      // Create a new game session using the game engine
+      const { createGameSession } = require('./game-engine/game-session-manager');
+      const gameSession = createGameSession(playerId, playerName, isSinglePlayer);
+      
+      // Join the socket to the game room with the server-generated game ID (not the client temp ID)
+      const actualGameId = gameSession.id;
+      socket.join(actualGameId);
+      socket.data.gameId = actualGameId;
+      socket.data.playerId = playerId;
+      
+      console.log(`[Socket.IO] Game created with ID: ${actualGameId} (replacing temp ID: ${gameId}), now starting...`);
       
       // Start the game using the imported startGame function
-      const startedSession = await startGame(gameId);
+      const startedSession = await startGame(actualGameId);
       
       if (!startedSession) {
-        console.error(`[Socket.IO] Failed to start game ${gameId}`);
+        console.error(`[Socket.IO] Failed to start game ${actualGameId}`);
         socket.emit('error', { message: 'Failed to start game' });
         return;
       }
       
-      console.log(`[Socket.IO] Game ${gameId} started successfully`);
+      console.log(`[Socket.IO] Game ${actualGameId} started successfully`);
       // Broadcast the game start and updated state
-      io.to(gameId).emit('game-started', {
+      io.to(actualGameId).emit('game-started', {
         gameState: startedSession.gameState,
-        correlationId: data.correlationId
+        correlationId: correlationId
       });
     } catch (error) {
-      console.error(`[Socket.IO] Error starting game:`, error);
+      console.error(`[Socket.IO] Error creating/starting game:`, error);
       socket.emit('error', {
-        message: error instanceof Error ? error.message : 'Unknown error starting game'
+        message: error instanceof Error ? error.message : 'Unknown error creating/starting game'
       });
     }
   });
@@ -160,7 +261,14 @@ io.on('connection', (socket) => {
     }
     
     try {
-      console.log(`[Socket.IO] Selecting cards for player ${playerId} in game ${gameId}`);
+      // Get the actual game ID from socket data if available
+      const actualGameId = socket.data.gameId || gameId;
+      
+      if (actualGameId !== gameId) {
+        console.log(`[Socket.IO] Using actual game ID ${actualGameId} instead of provided ID ${gameId}`);
+      }
+      
+      console.log(`[Socket.IO] Selecting cards for player ${playerId} in game ${actualGameId}`);
       
       // Create a select cards action
       const { v4: uuidv4 } = require('uuid');
@@ -171,13 +279,13 @@ io.on('connection', (socket) => {
         playerId: playerId,
         payload: { selectedCardIds },
         timestamp: Date.now(),
-        gameId: gameId,
+        gameId: actualGameId,
         validated: false
       };
       
       // Process the action - now async
       console.log(`[Socket.IO] Processing select cards action`);
-      const result = await processAction(gameId, selectAction);
+      const result = await processAction(actualGameId, selectAction);
       
       if (!result.session) {
         console.error(`[Socket.IO] Error selecting cards: ${result.error}`);
@@ -188,8 +296,8 @@ io.on('connection', (socket) => {
       }
       console.log(`[Socket.IO] Cards selected successfully, broadcasting update`);
 
-      // Broadcast the updated game state
-      io.to(gameId).emit('game-state-update', {
+      // Broadcast the updated game state (using the actual game ID)
+      io.to(actualGameId).emit('game-state-update', {
         gameState: result.session.gameState,
         action: selectAction,
         correlationId: data.correlationId
@@ -222,6 +330,122 @@ io.on('connection', (socket) => {
   });
 });
 
+// Helper function to handle clearing the card cost cache
+async function handleClearCardCostCache(socket: Socket, gameId: string, action: GameAction) {
+  try {
+    console.log(`[Socket.IO] Clearing card cost cache for game ${gameId}`);
+    
+    // Get the game session
+    const session = getGameSession(gameId);
+    
+    if (!session) {
+      console.error(`[Socket.IO] Game session ${gameId} not found`);
+      socket.emit('error', { message: 'Game session not found' });
+      return;
+    }
+    
+    // Import the LLM module
+    const { clearCardEnergyCostCache } = await import('./llm');
+    
+    // Clear the cache
+    clearCardEnergyCostCache();
+    
+    console.log(`[Socket.IO] Card cost cache cleared for game ${gameId}`);
+    
+    // Send success response
+    socket.emit('action-received', {
+      success: true,
+      message: 'Card cost cache cleared',
+      correlationId: action.correlationId
+    });
+    
+  } catch (error) {
+    console.error(`[Socket.IO] Error clearing card cost cache:`, error);
+    socket.emit('error', { 
+      message: error instanceof Error ? error.message : 'Unknown error clearing card cost cache'
+    });
+  }
+}
+
+// Helper function to handle card cost calculation
+async function handleCardCostCalculation(socket: Socket, gameId: string, action: GameAction) {
+  try {
+    console.log(`[Socket.IO] Calculating card cost for game ${gameId}, card ${action.payload.cardId}`);
+    
+    // Get the game session
+    const session = getGameSession(gameId);
+    
+    if (!session) {
+      console.error(`[Socket.IO] Game session ${gameId} not found`);
+      socket.emit('error', { message: 'Game session not found' });
+      return;
+    }
+    
+    // Get player and card information
+    const playerId = action.playerId;
+    const cardId = action.payload.cardId;
+    
+    const player = session.gameState.players[playerId];
+    if (!player) {
+      console.error(`[Socket.IO] Player ${playerId} not found in game session`);
+      socket.emit('error', { message: 'Player not found in game session' });
+      return;
+    }
+    
+    // Find the card in the player's hand
+    const card = player.hand.find(c => c.id === cardId);
+    if (!card) {
+      console.error(`[Socket.IO] Card ${cardId} not found in player's hand`);
+      socket.emit('error', { message: 'Card not found in player\'s hand' });
+      return;
+    }
+    
+    // Import the LLM module
+    const { calculateCardEnergyCost } = await import('./llm');
+    
+    // Convert game state to format for LLM
+    const llmGameState = {
+      players: Object.entries(session.gameState.players).reduce((acc, [id, player]) => {
+        acc[id] = {
+          id,
+          hp: player.hp,
+          maxHp: player.maxHp,
+          block: player.block,
+          energy: player.energy,
+          statusEffects: player.statusEffects || []
+        };
+        return acc;
+      }, {} as any),
+      activePlayerId: session.gameState.activePlayerId,
+      turn: session.gameState.turnNumber,
+      phase: session.gameState.phase
+    };
+    
+    // Calculate the energy cost
+    console.log(`[Socket.IO] Calling calculateCardEnergyCost for card ${card.name}`);
+    const costResult = await calculateCardEnergyCost(card, playerId, llmGameState);
+    
+    console.log(`[Socket.IO] Card ${card.name} costs ${costResult.energyCost} energy (${costResult.canPlay ? 'can play' : 'cannot play'}): ${costResult.reason}`);
+    
+    // Send the cost calculation result back only to the requesting client
+    // (not broadcasting to all clients in the room)
+    socket.emit('action-received', {
+      // Send only the cost calculation result, not the entire game state
+      canPlay: costResult.canPlay,
+      energyCost: costResult.energyCost,
+      reason: costResult.reason,
+      cardId: cardId,
+      correlationId: action.correlationId
+    });
+    
+  } catch (error) {
+    console.error(`[Socket.IO] Error calculating card cost:`, error);
+    socket.emit('error', { 
+      message: error instanceof Error ? error.message : 'Unknown error calculating card cost'
+    });
+  }
+}
+
 // Helper function to handle streaming card play
 async function handleStreamingCardPlay(socket: Socket, gameId: string, action: GameAction) {
   try {
@@ -230,8 +454,19 @@ async function handleStreamingCardPlay(socket: Socket, gameId: string, action: G
       type: action.type,
       playerId: action.playerId,
       payload: action.payload,
-      id: action.id
+      id: action.id,
+      correlationId: action.correlationId
     }));
+    
+    // Debug the action in more detail
+    console.log(`[DEBUG] Full action object for streaming:`, {
+      type: action.type,
+      playerId: action.playerId,
+      payload: action.payload,
+      id: action.id,
+      correlationId: action.correlationId,
+      hasStreamResponse: !!action.payload?.streamResponse
+    });
     
     // Get the session first to validate the action
     const session = getGameSession(gameId);
@@ -450,11 +685,20 @@ async function handleStreamingCardPlay(socket: Socket, gameId: string, action: G
     }
     
     // Signal end of stream
-    console.log(`[Socket.IO] Emitting stream-end event`);
+    console.log(`[Socket.IO] Emitting stream-end event with correlationId: ${action.correlationId}`);
+    console.log(`[DEBUG] Action object:`, {
+      type: action.type,
+      id: action.id,
+      correlationId: action.correlationId,
+      playerId: action.playerId,
+      cardId: cardId
+    });
+    
     io.to(gameId).emit('llm-stream-end', {
       cardId,
       playerId,
-      timestamp: Date.now()
+      timestamp: Date.now(),
+      correlationId: action.correlationId // Add correlation ID to ensure promise resolves
     });
     
     // Now process the card play action normally to update the game state
@@ -474,7 +718,8 @@ async function handleStreamingCardPlay(socket: Socket, gameId: string, action: G
     // Broadcast the final game state update
     io.to(gameId).emit('game-state-update', { 
       gameState: result.session.gameState,
-      action: action
+      action: action,
+      correlationId: action.correlationId
     });
     
   } catch (error) {
