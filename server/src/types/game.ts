@@ -106,6 +106,7 @@ export interface GameAction {
   timestamp: number;
   gameId: string;
   validated: boolean; // Indicates if action has been validated by the server
+  correlationId?: string; // Optional ID for client-side tracking
 }
 
 /**
@@ -118,7 +119,10 @@ export enum ActionType {
   SELECT_CARDS = 'SELECT_CARDS',
   APPLY_EFFECT = 'APPLY_EFFECT',
   GAME_INIT = 'GAME_INIT',
-  PROCESS_QUEUE = 'PROCESS_QUEUE'
+  PROCESS_QUEUE = 'PROCESS_QUEUE',
+  // Added for specific client requests handled by socket handlers
+  CALCULATE_CARD_COST = 'CALCULATE_CARD_COST',
+  CLEAR_CARD_COST_CACHE = 'CLEAR_CARD_COST_CACHE'
 }
 
 /**

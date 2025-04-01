@@ -4,7 +4,7 @@
  */
 
 import { v4 as uuidv4 } from 'uuid';
-import { GameState, GameAction, ActionType, Card } from '../types';
+import { GameState, GameAction, ActionType, Card, QueuedEffect } from '../types'; // Import QueuedEffect here
 import * as stateHelpers from './state-helpers';
 
 // Type-safe phase values
@@ -139,24 +139,12 @@ const handlePlayCard = async (state: GameState, action: GameAction): Promise<Gam
   console.log(`[Game Reducer] Wildcard effect: ${playedCard.wildcard_effect ? playedCard.wildcard_effect : 'None'}`);
 
   try {
-    // Convert game state to format for LLM
-    const llmGameState = {
-      players: Object.entries(newState.players).reduce((acc, [id, player]) => {
-        acc[id] = {
-          id,
-          hp: player.hp,
-          maxHp: player.maxHp,
-          block: player.block,
-          energy: player.energy,
-          statusEffects: player.statusEffects || []
-        };
-        return acc;
-      }, {} as any),
-      activePlayerId: newState.activePlayerId,
-      turn: newState.turnNumber,
-      phase: newState.phase
-    };
-    
+    // Import the state converter utility
+    const { mapToLLMGameState } = await import('./llm-service');
+
+    // Convert game state to format for LLM using the utility
+    const llmGameState = mapToLLMGameState(newState, targetPlayerId);
+
     // 1. First, calculate energy cost (should use cached value if available)
     const { calculateCardEnergyCost } = await import('../llm');
     const costResult = await calculateCardEnergyCost(playedCard, action.playerId, llmGameState);
@@ -169,19 +157,18 @@ const handlePlayCard = async (state: GameState, action: GameAction): Promise<Gam
     
     // 2. Apply the energy cost immediately
     let stateWithEnergyCost = newState;
-    const energyCostEffect = {
-      id: crypto.randomUUID(),
+    const energyCostEffect: Omit<QueuedEffect, 'id' | 'timestamp'> = { // Use imported QueuedEffect type
       type: 'energy',
       value: -costResult.energyCost, // Negative for cost
       source: action.playerId,
       target: action.playerId,
       card: cardId,
-      timing: "immediate",
+      timing: "immediate", // This should be assignable now
       actionId: action.id
     };
-    
+
     console.log(`[Game Reducer] Applying energy cost: ${costResult.energyCost} for player ${action.playerId}`);
-    stateWithEnergyCost = stateHelpers.addEffectToQueue(stateWithEnergyCost, energyCostEffect);
+    stateWithEnergyCost = stateHelpers.addEffectToQueue(stateWithEnergyCost, energyCostEffect); // Pass the correctly typed object
     stateWithEnergyCost = stateHelpers.processAllEffects(stateWithEnergyCost);
     
     // Set on_play_description as the initial narrative while we wait for effect interpretations
@@ -290,35 +277,23 @@ const handlePlayCard = async (state: GameState, action: GameAction): Promise<Gam
   } catch (error) {
     console.error(`[Game Reducer] Error interpreting card effects:`, error);
     console.log(`[Game Reducer] Falling back to basic effect processing`);
-    
+
     // Fallback: Just process the base effects directly
     let stateWithEffects = newState;
-    
+
     // Apply energy cost in fallback mode
     try {
       const { calculateCardEnergyCost } = await import('../llm');
-      const llmGameState = {
-        players: Object.entries(newState.players).reduce((acc, [id, player]) => {
-          acc[id] = {
-            id,
-            hp: player.hp,
-            maxHp: player.maxHp,
-            block: player.block,
-            energy: player.energy,
-            statusEffects: player.statusEffects || []
-          };
-          return acc;
-        }, {} as any),
-        activePlayerId: newState.activePlayerId,
-        turn: newState.turnNumber,
-        phase: newState.phase
-      };
-      
-      const costResult = await calculateCardEnergyCost(playedCard, action.playerId, llmGameState);
-      
-      // Apply the energy cost
+      // Import the state converter utility
+      const { mapToLLMGameState } = await import('./llm-service');
+      // Convert game state for fallback cost calculation
+      const llmGameStateFallback = mapToLLMGameState(newState, targetPlayerId);
+
+      const costResult = await calculateCardEnergyCost(playedCard, action.playerId, llmGameStateFallback);
+
+      // Apply the energy cost (without id)
       stateWithEffects = stateHelpers.addEffectToQueue(stateWithEffects, {
-        id: crypto.randomUUID(),
+        // id: crypto.randomUUID(), // Removed id
         type: 'energy',
         value: -costResult.energyCost, // Negative for cost
         source: action.playerId,
@@ -327,13 +302,13 @@ const handlePlayCard = async (state: GameState, action: GameAction): Promise<Gam
         timing: 'immediate',
         actionId: action.id
       });
-      
+
       stateWithEffects = stateHelpers.processAllEffects(stateWithEffects);
     } catch (costError) {
       console.error(`[Game Reducer] Error applying energy cost in fallback mode:`, costError);
-      // If calculating cost fails, apply base cost
+      // If calculating cost fails, apply base cost (without id)
       stateWithEffects = stateHelpers.addEffectToQueue(stateWithEffects, {
-        id: crypto.randomUUID(),
+        // id: crypto.randomUUID(), // Removed id
         type: 'energy',
         value: -playedCard.cost, // Negative for cost
         source: action.playerId,
@@ -342,14 +317,14 @@ const handlePlayCard = async (state: GameState, action: GameAction): Promise<Gam
         timing: 'immediate',
         actionId: action.id
       });
-      
+
       stateWithEffects = stateHelpers.processAllEffects(stateWithEffects);
     }
-    // Process base effects (fallback - string format)
+    // Process base effects (fallback - string format) (without id)
     if (playedCard.base_effects) {
       // Add the effect to the queue
       stateWithEffects = stateHelpers.addEffectToQueue(stateWithEffects, {
-        id: crypto.randomUUID(),
+        // id: crypto.randomUUID(), // Removed id
         type: 'effect', // Generic effect type
         value: 0, // No specific value
         source: action.playerId,

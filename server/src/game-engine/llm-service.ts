@@ -1,4 +1,4 @@
-import { Card } from '@/types';
+import { Card, GameState } from '@/types'; // Import GameState
 import { generateCards, interpretCardEffects, StateChangeAction } from '../llm';
 
 /**
@@ -21,9 +21,34 @@ export interface LLMGameState {
     };
   };
   activePlayerId: string;
-  turn: number;
+  turn: number; // Represents GameState.turnNumber
   phase: string;
+  targetId?: string; // Optional target ID for context
 }
+
+/**
+ * Utility function to convert GameState to LLMGameState
+ */
+export function mapToLLMGameState(state: GameState, targetId?: string): LLMGameState {
+  return {
+    players: Object.entries(state.players).reduce((acc, [id, player]) => {
+      acc[id] = {
+        id,
+        hp: player.hp,
+        maxHp: player.maxHp,
+        block: player.block,
+        energy: player.energy,
+        statusEffects: player.statusEffects || []
+      };
+      return acc;
+    }, {} as LLMGameState['players']),
+    activePlayerId: state.activePlayerId,
+    turn: state.turnNumber, // Map turnNumber to turn
+    phase: state.phase,
+    targetId // Include targetId if provided
+  };
+}
+
 
 /**
  * Service for handling LLM interactions in the game engine
@@ -191,8 +216,6 @@ export class LLMService {
       id: card.id,
       name: card.name,
       cost: card.cost,
-      type: card.type,
-      rarity: card.rarity,
       base_effects_count: card.base_effects?.length || 0,
       has_wildcard: !!card.wildcard_effect,
       has_description: !!card.on_play_description,

@@ -6,7 +6,7 @@ export { EffectInterpreter, StateChangeAction, EffectInterpretationStreamEvent }
 // Export singleton instances
 import { llmClient } from './api-client';
 import { cardGenerator } from './card-generator';
-import { effectInterpreter } from './effect-interpreter';
+import { EffectInterpretationStreamEvent, effectInterpreter, StateChangeAction } from './effect-interpreter';
 
 export { llmClient, cardGenerator, effectInterpreter };
 
