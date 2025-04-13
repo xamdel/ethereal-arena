@@ -1,0 +1,201 @@
+.screenContainer {
+  display: flex;
+  flex-direction: column;
+  height: 100vh; /* Full viewport height */
+  max-height: 100vh; /* Ensure it doesn't exceed */
+  background-color: #1a1a2e; /* Dark background */
+  color: #e0e0e0; /* Light text */
+  overflow: hidden; /* Prevent BODY scroll */
+}
+
+/* Fixed Top Section */
+.topSection {
+  padding: 1rem 2rem 0.5rem; /* Adjust padding as needed */
+  background-color: #1a1a2e; /* Match background */
+  z-index: 10; /* Keep above main content */
+  position: relative; /* Ensure z-index works */
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  flex-shrink: 0; /* Prevent shrinking */
+}
+
+.title {
+  margin-bottom: 1rem; /* Reduced margin */
+  color: #f0a500; /* Accent color */
+  font-size: 2.2rem; /* Slightly smaller */
+  text-align: center;
+}
+
+.inputSection {
+  display: flex;
+  gap: 1rem;
+  margin-bottom: 1rem; /* Reduced margin */
+  width: 100%;
+  max-width: 600px;
+  justify-content: center;
+}
+
+.classNameInput {
+  flex-grow: 1;
+  padding: 0.8rem 1rem;
+  border: 1px solid #4a4a6a;
+  border-radius: 4px;
+  background-color: #2a2a4e;
+  color: #e0e0e0;
+  font-size: 1rem;
+}
+
+.classNameInput::placeholder {
+  color: #888;
+}
+
+.generateButton {
+  padding: 0.8rem 1.5rem;
+  background-color: #f0a500; /* Accent color */
+  color: #1a1a2e; /* Dark text on button */
+  border: none;
+  border-radius: 4px;
+  font-size: 1rem;
+  font-weight: bold;
+  cursor: pointer;
+  transition: background-color 0.2s ease;
+}
+
+.generateButton:hover:not(:disabled) {
+  background-color: #ffc107;
+}
+
+.generateButton:disabled {
+  background-color: #555;
+  cursor: not-allowed;
+  color: #aaa;
+}
+
+.errorMessage {
+  color: #ff4d4d; /* Red for errors */
+  margin-bottom: 0.5rem; /* Reduced margin */
+  text-align: center;
+  min-height: 1.2em; /* Reserve space even when empty */
+}
+
+.loadingIndicator {
+  /* Keep in top section or move if preferred */
+  margin-top: 0.5rem; /* Reduced margin */
+  font-size: 1.1rem;
+  color: #f0a500;
+  text-align: center;
+  min-height: 1.2em; /* Reserve space */
+}
+
+
+/* Main Content Area - Fills remaining space */
+.mainContentArea {
+  flex-grow: 1; /* Takes up remaining vertical space */
+  position: relative; /* Crucial for positioning children */
+  overflow: hidden; /* Clip content, scroll handled internally */
+  width: 100%;
+}
+
+/* Fixed background container within main area */
+.fixedBackground {
+  position: absolute; /* Position relative to mainContentArea */
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%; /* Fill the mainContentArea */
+  z-index: 1; /* Behind scroll container */
+  overflow: hidden;
+}
+
+/* Ensure CharacterImageDisplay component fills the background */
+.fixedBackground > div {
+  position: absolute; /* Should already be handled by component? Verify */
+  top: 0; /* Redundant if component handles it */
+  left: 0; /* Redundant if component handles it */
+  width: 100%;
+  height: 100%;
+  /* Ensure component styles allow covering */
+}
+
+.fixedBackground img { /* Target image directly if needed */
+  object-fit: cover !important;
+  width: 100%;
+  height: 100%;
+}
+
+/* Carousel Content Area - Container for animated sections */
+.carouselContent {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 2; /* Above background */
+  padding: 0 8vw; /* Use relative padding for edge spacing like before */
+  box-sizing: border-box; /* Include padding in width */
+  /* No overflow here, handled by mainContentArea */
+}
+
+/* Section for the two info cards */
+.infoCardsSection {
+  position: absolute; /* Position within carouselContent */
+  width: calc(100% - 16vw); /* Account for parent padding */
+  left: 8vw; /* Align with parent padding */
+  top: 0; /* Start positioning from the top */
+  transform: translateY(15vh); /* Initial position (Info View) */
+  transition: transform 0.6s ease-in-out; /* Smooth transition */
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  z-index: 5; /* Keep above background potentially */
+  pointer-events: none; /* Allow clicks on cards inside */
+}
+.infoCardsSection > * {
+  pointer-events: auto;
+  flex-basis: 33%;
+  max-width: 33%;
+}
+
+/* Wrapper for the starting cards section */
+.startingCardsSectionWrapper {
+  position: absolute; /* Position within carouselContent */
+  width: calc(100% - 16vw); /* Account for parent padding */
+  left: 8vw; /* Align with parent padding */
+  top: 0; /* Start positioning from the top */
+  /* Initial position (Info View - partially visible) */
+  /* Adjust this value carefully to show ~20% */
+  transform: translateY(65vh);
+  transition: transform 0.6s ease-in-out; /* Smooth transition */
+  z-index: 4; /* Slightly below info cards if overlap occurs */
+  display: flex; /* Keep flex for centering content */
+  justify-content: center; /* Keep centering content */
+  /* Add max-height and overflow to clip in info view */
+  max-height: 35vh; /* Approximate height for preview */
+  overflow: hidden;
+  /* Ensure the inner StartingCardsSection fills the wrapper */
+}
+.startingCardsSectionWrapper > * {
+  width: 100%; /* Make StartingCardsSection fill wrapper */
+}
+
+
+/* --- Active States (when cardsViewActive class is present) --- */
+
+.carouselContent.cardsViewActive .infoCardsSection {
+  transform: translateY(-100vh); /* Move info cards up and off-screen */
+}
+
+.carouselContent.cardsViewActive .startingCardsSectionWrapper {
+  /* Center vertically. calc(50vh - 50%) centers the *top* edge at 50vh. */
+  /* To truly center, we need to know its height or use flexbox on parent */
+  /* Let's try a simpler approach first, aiming for roughly center */
+  transform: translateY(25vh); /* Adjust this value based on testing */
+  max-height: none; /* Remove height restriction */
+  overflow: visible; /* Show full content */
+}
+
+/* Remove old spacers if they exist */
+.contentSpacerTop, .contentSpacerBottom {
+    display: none;
+}

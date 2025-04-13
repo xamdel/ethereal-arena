@@ -1,0 +1,49 @@
+.imageContainer {
+  width: 100%;
+  /* Make it take up significant vertical space, adjust as needed */
+  height: 80vh; /* Example: 80% of viewport height */
+  max-height: 700px; /* Optional max height */
+  background-color: #1a1a2e; /* Dark background */
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  overflow: hidden; /* Ensure image doesn't overflow */
+  position: sticky; /* Make it sticky during scroll */
+  top: 0; /* Stick to the top of its container */
+  z-index: 1; /* Behind overlays */
+  border-radius: 8px; /* Optional rounded corners */
+  border: 1px solid #3a3a5a; /* Subtle border */
+}
+
+.characterImage {
+  width: 100%;
+  height: 100%;
+  object-fit: contain; /* Contain ensures the whole image is visible */
+  object-position: center center;
+}
+
+.placeholder,
+.loading {
+  color: #888;
+  font-size: 1.5rem;
+  text-align: center;
+  border: 2px dashed #4a4a6a;
+  border-radius: 8px;
+}
+
+.loading {
+  color: #f0a500; /* Accent color for loading text */
+  animation: pulse 1.5s infinite ease-in-out;
+}
+
+@keyframes pulse {
+  0% {
+    opacity: 0.6;
+  }
+  50% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0.6;
+  }
+}

@@ -1,0 +1,90 @@
+.infoCard {
+  background-color: rgba(26, 26, 46, 0.85); /* Semi-transparent dark background */
+  border: 1px solid #4a4a6a;
+  border-radius: 8px;
+  padding: 15px;
+  color: #e0e0e0;
+  max-width: 300px; /* Keep width or adjust as needed */
+  height: 40vh; /* Use fixed height instead of max-height */
+  /* overflow-y: auto; */ /* Remove scroll from the main card */
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.5);
+  pointer-events: auto; /* Make sure card content is interactive */
+  display: flex;
+  flex-direction: column;
+  overflow: hidden; /* Hide overflow from the main card */
+}
+
+/* Remove scrollbar styles from .infoCard */
+/*
+.infoCard::-webkit-scrollbar { ... }
+.infoCard::-webkit-scrollbar-track { ... }
+.infoCard::-webkit-scrollbar-thumb { ... }
+*/
+
+.imageSection {
+  width: 80px; /* Fixed size for portrait */
+  height: 80px;
+  border-radius: 50%; /* Circular portrait */
+  overflow: hidden;
+  margin: 0 auto 15px auto; /* Center image */
+  border: 2px solid #f0a500; /* Accent border */
+  flex-shrink: 0; /* Prevent image from shrinking */
+}
+
+.cardImage {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.cardTitle {
+  color: #f0a500; /* Accent color */
+  text-align: center;
+  margin: 0 0 15px 0;
+  padding-bottom: 10px;
+  border-bottom: 1px solid #4a4a6a;
+  font-size: 1.2rem;
+  flex-shrink: 0; /* Prevent title from shrinking */
+}
+
+.contentSection {
+  flex-grow: 1; /* Allow content to take remaining space */
+  overflow-y: auto; /* Enable scrolling specifically for the content */
+  font-size: 0.9rem;
+  line-height: 1.5;
+  /* Add padding to prevent content touching scrollbar */
+  padding-right: 5px;
+  /* Custom scrollbar for content section */
+  scrollbar-width: thin; /* Firefox */
+  scrollbar-color: #6a6a8a rgba(42, 42, 78, 0.5); /* Firefox */
+}
+
+/* Custom scrollbar for webkit browsers (content section) */
+.contentSection::-webkit-scrollbar {
+  width: 8px;
+}
+
+.contentSection::-webkit-scrollbar-track {
+  background: rgba(42, 42, 78, 0.5);
+  border-radius: 4px;
+}
+
+.contentSection::-webkit-scrollbar-thumb {
+  background-color: #6a6a8a;
+  border-radius: 4px;
+  border: 2px solid rgba(26, 26, 46, 0.85); /* Match card background */
+}
+
+
+.paragraphContent {
+  margin: 0;
+}
+
+.listContent {
+  margin: 0;
+  padding-left: 20px; /* Indent list items */
+}
+
+.listContent li {
+  margin-bottom: 8px;
+}

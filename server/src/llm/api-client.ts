@@ -13,6 +13,16 @@ export interface LLMResponse {
   totalTokens: number;
 }
 
+// Define the structure for the response_format parameter
+interface JsonSchemaResponseFormat {
+  type: 'json_schema';
+  json_schema: {
+    name: string;
+    strict?: boolean; // Optional, defaults to false if not provided
+    schema: object; // JSON Schema definition
+  };
+}
+
 interface OpenRouterResponse {
   id: string;
   object: string;
@@ -63,8 +73,8 @@ const DEFAULT_CONFIG: LLMClientConfig = {
   defaultModel: 'google/gemini-2.0-flash-001',
   maxRetries: 3,
   retryDelay: 1000,
-  httpReferer: 'https://etherealarena.com', // Uncommented for proper attribution
-  xTitle: 'Ethereal Arena', 
+  // httpReferer: 'https://etherealarena.com',
+  // xTitle: 'Ethereal Arena', 
 };
 
 export class LLMClient {
@@ -107,6 +117,7 @@ export class LLMClient {
       maxTokens?: number;
       temperature?: number;
       systemPrompt?: string;
+      response_format?: JsonSchemaResponseFormat; // Add response_format option
     } = {}
   ): Promise<LLMResponse> {
     const {
@@ -114,6 +125,7 @@ export class LLMClient {
       maxTokens = 4000,
       temperature = 0.7,
       systemPrompt = "You are a helpful AI assistant that generates card game content and interprets card effects.",
+      response_format, // Destructure the new option
     } = options;
 
     try {
@@ -124,8 +136,8 @@ export class LLMClient {
         try {
           console.log(`[LLMClient] Sending request to ${model} with ${prompt.length} chars prompt`);
           
-          // Create the request payload
-          const payload = {
+          // Create the base request payload
+          const payload: any = { // Use 'any' temporarily for flexibility
             model,
             messages: [
               {
@@ -140,8 +152,17 @@ export class LLMClient {
             max_tokens: maxTokens,
             temperature,
           };
+
+          // Add response_format if provided
+          if (response_format) {
+            payload.response_format = response_format;
+            // Ensure strict mode is true if not explicitly set to false
+            if (response_format.json_schema.strict !== false) {
+              payload.response_format.json_schema.strict = true;
+            }
+          }
           
-          // Log the request payload for debugging
+          // Log the request payload for debugging (handle potential circular refs if schema is complex)
           console.log(`[LLMClient] Request payload:`, JSON.stringify({
             model,
             messages_count: payload.messages.length,
@@ -149,6 +170,8 @@ export class LLMClient {
             user_message_length: prompt.length,
             max_tokens: maxTokens,
             temperature,
+            response_format_type: payload.response_format?.type, // Log format type if present
+            response_format_name: payload.response_format?.json_schema?.name, // Log schema name if present
           }));
           
           // Use native fetch instead of the OpenAI SDK

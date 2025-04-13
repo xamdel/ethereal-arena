@@ -5,6 +5,8 @@ import { Server as HttpServer } from 'http';
 import { Server as SocketIOServer, Socket } from 'socket.io';
 import { registerConnectionHandlers } from './connectionHandlers';
 import { registerGameHandlers } from './gameHandlers';
+import { handleGenerateCharacter } from './characterHandlers'; // Added import
+import { CharacterGenerationRequest } from '../types/character'; // Added import
 
 // Define allowed origins based on environment variables or defaults
 const allowedOrigins = [
@@ -27,6 +29,11 @@ export function initializeSocketServer(httpServer: HttpServer): SocketIOServer {
     // Register handlers for this connection
     registerConnectionHandlers(io, socket);
     registerGameHandlers(io, socket);
+
+    // Character generation handler
+    socket.on('generateCharacter', (data: CharacterGenerationRequest) => {
+      handleGenerateCharacter(io, socket, data);
+    });
 
     // Centralized disconnect handler (moved from connectionHandlers)
     socket.on('disconnect', () => {

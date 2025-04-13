@@ -1,0 +1,169 @@
+.gameScreen {
+  display: flex;
+  flex-direction: column;
+  height: calc(100vh - 50px); /* Adjust based on header/status height */
+  background-color: #1e1e1e;
+  color: #ccc;
+  padding: 10px;
+  box-sizing: border-box;
+  overflow: hidden; /* Prevent main screen scroll */
+}
+
+.loading {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    height: 100%;
+    font-size: 1.5em;
+    color: #aaa;
+}
+
+.opponentArea {
+  /* Styles for opponent's side */
+  border-bottom: 1px solid #444;
+  padding-bottom: 10px;
+  min-height: 100px; /* Example height */
+}
+
+.playerArea {
+  /* Styles for player's side */
+  border-top: 1px solid #444;
+  padding-top: 10px;
+  display: flex;
+  flex-direction: column;
+  min-height: 220px; /* Example height, slightly larger for hand/button */
+}
+
+.combatLogArea {
+    flex-grow: 1; /* Takes up remaining space */
+    overflow-y: auto; /* Allows scrolling */
+    padding: 15px;
+    margin: 10px 0;
+    background-color: rgba(0, 0, 0, 0.2);
+    border: 1px solid #333;
+    border-radius: 4px;
+    font-family: monospace; /* Good for logs */
+    font-size: 0.9em;
+}
+
+.combatLog h4 {
+    margin-top: 0;
+    margin-bottom: 10px;
+    color: #bbb;
+    border-bottom: 1px solid #444;
+    padding-bottom: 5px;
+}
+
+.combatLog ul {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+}
+
+.combatLog li {
+    margin-bottom: 5px;
+    line-height: 1.4;
+    word-wrap: break-word; /* Wrap long words/content */
+    /* Add styles based on type */
+}
+
+.logTimestamp {
+    color: #777;
+    margin-right: 8px;
+    user-select: none; /* Prevent selecting timestamp */
+}
+
+.logEntry_system { color: #888; }
+.logEntry_narrative { color: #aaa; font-style: italic; }
+.logEntry_effect { color: #ccc; } /* Default effect color */
+.logEntry_damage { color: #ff6b6b; } /* Red for damage */
+.logEntry_heal { color: #6bcb77; } /* Green for heal */
+.logEntry_block { color: #4db6ac; } /* Teal for block */
+.logEntry_error { color: #ff8a80; font-weight: bold; }
+
+
+.playerInfo {
+  border: 1px solid #555;
+  padding: 10px;
+  margin-bottom: 10px;
+  border-radius: 4px;
+  background-color: rgba(255, 255, 255, 0.05);
+  display: inline-block; /* Prevent taking full width */
+  min-width: 200px;
+}
+
+.playerInfo h3 {
+  margin: 0 0 5px 0;
+  color: #eee;
+  font-size: 1.1em;
+}
+
+.playerInfo p {
+  margin: 3px 0;
+  font-size: 0.9em;
+}
+
+.handArea {
+  margin-top: 10px;
+  margin-bottom: 15px; /* Space before end turn button */
+}
+
+.handArea h4 {
+    margin-bottom: 10px;
+    text-align: center;
+    color: #bbb;
+    font-size: 0.9em;
+    text-transform: uppercase;
+}
+
+.handCards {
+  display: flex;
+  justify-content: center;
+  gap: 10px;
+  flex-wrap: wrap; /* Allow wrapping if many cards */
+  min-height: 120px; /* Example height */
+  align-items: flex-start; /* Align cards to top */
+  padding: 5px;
+}
+
+.cardInHand {
+  border: 1px solid #666;
+  padding: 10px;
+  border-radius: 5px;
+  background-color: #3a3a3a;
+  cursor: pointer;
+  min-width: 120px; /* Example width */
+  max-width: 150px;
+  transition: transform 0.2s ease, background-color 0.2s ease, border-color 0.2s ease;
+  box-shadow: 2px 2px 5px rgba(0,0,0,0.3);
+}
+
+.cardInHand:hover {
+  background-color: #4a4a4a;
+  border-color: #888;
+  transform: translateY(-5px);
+}
+
+.cardInHand h5 {
+    margin: 0 0 5px 0;
+    font-size: 0.9em;
+    color: #eee;
+}
+
+.endTurnButton {
+    align-self: center; /* Center the button */
+    padding: 10px 25px;
+    font-size: 1em;
+    font-weight: bold;
+    cursor: pointer;
+    border: none;
+    border-radius: 6px;
+    background-color: #ff8a80; /* Reddish color for end turn */
+    color: white;
+    transition: background-color 0.2s ease;
+    margin-top: auto; /* Push to bottom if playerArea has extra space */
+}
+
+.endTurnButton:hover {
+    background-color: #ff5252;
+}

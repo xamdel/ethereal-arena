@@ -1,0 +1,55 @@
+.sectionContainer {
+  width: 90%; /* Take up most of the width */
+  max-width: 1000px; /* Max width for larger screens */
+  margin: 20px auto 0 auto; /* Spacing from top, centered horizontally */
+  padding: 15px;
+  background-color: rgba(26, 26, 46, 0.75); /* Semi-transparent background */
+  border-radius: 8px;
+  border: 1px solid #4a4a6a;
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.4);
+  z-index: 5; /* Ensure it's above the image but potentially below info cards if needed */
+  position: relative; /* Needed if we absolutely position within */
+  pointer-events: auto; /* Allow interaction */
+}
+
+.sectionHeader {
+  color: #f0a500; /* Accent color */
+  text-align: center;
+  margin: 0 0 15px 0;
+  font-size: 1.4rem;
+  border-bottom: 1px solid #4a4a6a;
+  padding-bottom: 10px;
+}
+
+.cardsWrapper {
+  display: flex;
+  justify-content: center; /* Center cards horizontally */
+  gap: 15px; /* Space between cards */
+  padding: 10px 0;
+  overflow-x: auto; /* Allow horizontal scrolling if cards overflow */
+  /* Add some padding at the ends if scrolling */
+  padding-left: 15px;
+  padding-right: 15px;
+}
+
+/* Custom scrollbar for the card wrapper */
+.cardsWrapper::-webkit-scrollbar {
+  height: 8px; /* Horizontal scrollbar height */
+}
+
+.cardsWrapper::-webkit-scrollbar-track {
+  background: rgba(42, 42, 78, 0.5);
+  border-radius: 4px;
+}
+
+.cardsWrapper::-webkit-scrollbar-thumb {
+  background-color: #6a6a8a;
+  border-radius: 4px;
+  border: 2px solid rgba(26, 26, 46, 0.75);
+}
+
+.noCardsMessage {
+  text-align: center;
+  color: #aaa;
+  padding: 20px;
+}

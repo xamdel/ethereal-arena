@@ -1,4 +1,5 @@
 import { Card, GameState } from '@/types'; // Import GameState
+import { llmClient } from '../llm/api-client'; // Added import
 import { generateCards, interpretCardEffects, StateChangeAction } from '../llm';
 
 /**
