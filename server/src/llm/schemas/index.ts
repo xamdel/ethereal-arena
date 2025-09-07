@@ -16,10 +16,24 @@ export const characterSchema = {
       classFeatures: {
         type: 'array',
         description: 'Exactly three unique features defining the class\'s high-level playstyle. Each feature should be a single, concise sentence.',
+        items: {
+          type: 'string'
+        }
       },
       startingCards: {
         type: 'array',
-        description: 'Exactly six starting cards representing the class\'s initial abilities, consistent with class theme and features. Each card must have: artPrompt (string), abilityName (string), effects (string), flavorText (string), cost (integer 0-5).',
+        description: 'Exactly six starting cards representing the class\'s initial abilities, consistent with class theme and features.',
+        items: {
+          type: 'object',
+          properties: {
+            artPrompt: { type: 'string' },
+            abilityName: { type: 'string' },
+            effects: { type: 'string' },
+            flavorText: { type: 'string' },
+            cost: { type: 'integer' }
+          },
+          required: ['artPrompt', 'abilityName', 'effects', 'flavorText', 'cost']
+        }
       },
     },
     required: [
