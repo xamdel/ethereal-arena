@@ -101,10 +101,14 @@ Remember: Art style will be applied automatically for consistency. Focus on clea
     }
     // --- End Transformation Step ---
 
-      // With structured output, minimal validation needed - schema ensures structure
+      // Basic validation - simplified schema requires some manual checks
       if (!llmDetails.fullBodyPrompt || !llmDetails.descriptionAndBackstory || 
-          !llmDetails.classFeatures || !llmDetails.startingCards) {
-        throw new Error('LLM output missing required fields despite structured output.');
+          !Array.isArray(llmDetails.classFeatures) || llmDetails.classFeatures.length !== 3 ||
+          !Array.isArray(llmDetails.startingCards) || llmDetails.startingCards.length !== 6 ||
+          !llmDetails.startingCards.every((card: any) => 
+            card.abilityName && card.artPrompt && card.effects && card.flavorText && 
+            typeof card.cost === 'number' && card.cost >= 0 && card.cost <= 5)) {
+        throw new Error('LLM output validation failed - missing required fields or incorrect structure.');
       }
 
         console.log('[CharacterGenerator] Successfully parsed and validated character details from LLM response.');
