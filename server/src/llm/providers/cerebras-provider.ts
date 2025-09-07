@@ -73,6 +73,7 @@ export class CerebrasProvider implements LLMProvider {
       maxTokens = 4000,
       temperature = 0.7,
       systemPrompt = "You are a helpful AI assistant that generates card game content and interprets card effects.",
+      response_format,
     } = options;
 
     try {
@@ -94,14 +95,22 @@ export class CerebrasProvider implements LLMProvider {
             user_message_length: prompt.length,
             max_tokens: maxTokens,
             temperature,
+            response_format_type: response_format?.type,
+            response_format_name: (response_format as any)?.json_schema?.name,
           }));
 
-          const response = await this.cerebras.chat.completions.create({
+          const requestPayload: any = {
             messages,
             model,
             max_tokens: maxTokens,
             temperature,
-          });
+          };
+
+          if (response_format) {
+            requestPayload.response_format = response_format;
+          }
+
+          const response = await this.cerebras.chat.completions.create(requestPayload);
 
           console.log(`[CerebrasProvider] Raw response:`, JSON.stringify(response));
 

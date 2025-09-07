@@ -57,7 +57,7 @@ export class LLMClient {
       maxTokens?: number;
       temperature?: number;
       systemPrompt?: string;
-      response_format?: 'json_object';
+      response_format?: 'json_object' | { type: 'json_schema'; json_schema: any };
     } = {}
   ): Promise<LLMResponse> {
     // Convert options to provider format
@@ -66,6 +66,7 @@ export class LLMClient {
       maxTokens: options.maxTokens,
       temperature: options.temperature,
       systemPrompt: options.systemPrompt,
+      response_format: options.response_format,
     };
 
     return await this.provider.complete(prompt, providerOptions);

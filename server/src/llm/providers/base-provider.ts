@@ -34,7 +34,7 @@ export interface CompletionOptions {
   maxTokens?: number;
   temperature?: number;
   systemPrompt?: string;
-  response_format?: 'json_object';
+  response_format?: 'json_object' | { type: 'json_schema'; json_schema: any };
 }
 
 export interface StreamOptions {

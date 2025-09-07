@@ -79,28 +79,12 @@ Remember: Art style will be applied automatically for consistency. Focus on clea
     const response = await llmClient.complete(userPrompt, {
       systemPrompt,
       temperature: 0.6, // Slightly higher temperature for creativity
-      // response_format: responseFormat, // Pass the structured output format
-      // Consider adjusting maxTokens if needed, though structured output might manage this
+      response_format: responseFormat, // Pass the structured output format
     });
     timings.llmCallEnd = performance.now(); // Record LLM call end time
 
-    const rawContent = response.content;
-    console.log(`[CharacterGenerator] Received LLM response content (raw): ${rawContent.substring(0, 150)}...`); // Log raw
-
-    let contentToParse = rawContent.trim(); // Trim whitespace first
-
-    // Check for and strip markdown fences
-    if (contentToParse.startsWith('```json') && contentToParse.endsWith('```')) {
-        console.log('[CharacterGenerator] Detected markdown fences, attempting to strip.');
-        // Remove ```json prefix (and potential newline) and ``` suffix
-        contentToParse = contentToParse.replace(/^```json\s*/, '').replace(/\s*```$/, '');
-        console.log(`[CharacterGenerator] Content after stripping fences: ${contentToParse.substring(0, 150)}...`);
-    } else {
-        console.log('[CharacterGenerator] No markdown fences detected.');
-    }
-
-    // Attempt to parse the potentially cleaned JSON string
-    llmDetails = JSON.parse(contentToParse) as LLMCharacterOutput;
+    // With structured output, response.content should already be valid JSON
+    llmDetails = JSON.parse(response.content) as LLMCharacterOutput;
     timings.jsonParseEnd = performance.now(); // Record JSON parsing end time
 
     // --- Add Transformation Step ---
@@ -117,23 +101,10 @@ Remember: Art style will be applied automatically for consistency. Focus on clea
     }
     // --- End Transformation Step ---
 
-      // Basic validation (remains important)
-      if (
-        typeof llmDetails.fullBodyPrompt !== 'string' || !llmDetails.fullBodyPrompt ||
-        // typeof llmDetails.facialPortraitPrompt !== 'string' || !llmDetails.facialPortraitPrompt || // Removed validation
-        typeof llmDetails.descriptionAndBackstory !== 'string' || !llmDetails.descriptionAndBackstory ||
-        !Array.isArray(llmDetails.classFeatures) || llmDetails.classFeatures.length !== 3 || !llmDetails.classFeatures.every(f => typeof f === 'string' && f.length > 0) || // Ensure features are non-empty strings
-        !Array.isArray(llmDetails.startingCards) || llmDetails.startingCards.length !== 6 || // Check for 6 cards
-        !llmDetails.startingCards.every((card: StartingCardData) => // Add type annotation
-          typeof card.artPrompt === 'string' && card.artPrompt &&
-          typeof card.abilityName === 'string' && card.abilityName &&
-          typeof card.effects === 'string' && card.effects &&
-          typeof card.flavorText === 'string' && card.flavorText &&
-          typeof card.cost === 'number' && Number.isInteger(card.cost) && card.cost >= 0 && card.cost <= 5 // Validate cost
-        )
-      ) {
-        console.error('[CharacterGenerator] Validation failed. LLM output:', JSON.stringify(llmDetails, null, 2));
-        throw new Error('LLM output validation failed. Structure or content mismatch.');
+      // With structured output, minimal validation needed - schema ensures structure
+      if (!llmDetails.fullBodyPrompt || !llmDetails.descriptionAndBackstory || 
+          !llmDetails.classFeatures || !llmDetails.startingCards) {
+        throw new Error('LLM output missing required fields despite structured output.');
       }
 
         console.log('[CharacterGenerator] Successfully parsed and validated character details from LLM response.');
@@ -156,22 +127,19 @@ Remember: Art style will be applied automatically for consistency. Focus on clea
 
     // Helper function to time individual image generation calls and store duration
     async function timeImageGeneration(label: string, prompt: string, model: string, size: string | { width: number; height: number }): Promise<string> {
-      console.log(`[CharacterGenerator] Starting image generation for: ${label}`);
       const startTime = performance.now();
       try {
         const result = await generateImage(prompt, model, size);
         const endTime = performance.now();
         const duration = endTime - startTime;
         imageDurations[label] = duration; // Store duration
-        console.log(`[CharacterGenerator] Finished image generation for: ${label} in ${duration.toFixed(2)}ms`);
-        console.log(`[Performance] Detailed: ${label} generation took ${duration.toFixed(2)}ms`);
         return result;
       } catch (error) {
         const endTime = performance.now();
         // Calculate duration within catch scope
         const duration = endTime - startTime;
         imageDurations[label] = duration; // Store duration even on failure
-        console.error(`[CharacterGenerator] FAILED image generation for: ${label} after ${duration.toFixed(2)}ms`, error);
+        console.error(`[CharacterGenerator] FAILED image generation for: ${label}`, error);
         // Re-throw the error to be caught by the main try/catch block
         throw error; // Error type is handled by the outer catch
       }
@@ -185,8 +153,8 @@ Remember: Art style will be applied automatically for consistency. Focus on clea
     const portraitSize = 'square';
     const cardArtModel = 'fal-ai/flux-1/schnell'; // Assuming this model exists and accepts 'square'
     const cardArtSize =  {
-                          "width": 200,
-                          "height": 200
+                          "width": 128,
+                          "height": 128
                           };
 
     // Apply consistent art styles to prompts
@@ -195,9 +163,6 @@ Remember: Art style will be applied automatically for consistency. Focus on clea
     const styledCardPrompts = llmDetails.startingCards.map(card => 
       generateCardArtPrompt(card.artPrompt, '')
     );
-
-    console.log('[CharacterGenerator] Styled full body prompt:', styledFullBodyPrompt.substring(0, 200) + '...');
-    console.log('[CharacterGenerator] Sample styled card prompt:', styledCardPrompts[0]?.substring(0, 200) + '...');
 
     // Create promises for all image generations using the timing helper
     console.log('[CharacterGenerator] Creating image generation promises...');
