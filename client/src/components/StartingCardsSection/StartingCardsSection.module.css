@@ -1,9 +1,9 @@
 .sectionContainer {
   width: 90%; /* Take up most of the width */
-  max-width: 1000px; /* Max width for larger screens */
+  /* max-width: 1000px; Max width for larger screens */
   margin: 20px auto 0 auto; /* Spacing from top, centered horizontally */
   padding: 15px;
-  background-color: rgba(26, 26, 46, 0.75); /* Semi-transparent background */
+  background-color: rgba(26, 26, 46, 0.4); /* Semi-transparent background */
   border-radius: 8px;
   border: 1px solid #4a4a6a;
   box-shadow: 0 4px 8px rgba(0, 0, 0, 0.4);
@@ -45,7 +45,7 @@
 .cardsWrapper::-webkit-scrollbar-thumb {
   background-color: #6a6a8a;
   border-radius: 4px;
-  border: 2px solid rgba(26, 26, 46, 0.75);
+  border: 2px solid rgba(26, 26, 46, 0.4);
 }
 
 .noCardsMessage {

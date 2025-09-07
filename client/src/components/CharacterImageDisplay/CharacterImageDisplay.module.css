@@ -1,8 +1,8 @@
 .imageContainer {
   width: 100%;
   /* Make it take up significant vertical space, adjust as needed */
-  height: 80vh; /* Example: 80% of viewport height */
-  max-height: 700px; /* Optional max height */
+  height: 100%; /* Example: 80% of viewport height */
+  /* max-height: 700px; Optional max height */
   background-color: #1a1a2e; /* Dark background */
   display: flex;
   justify-content: center;

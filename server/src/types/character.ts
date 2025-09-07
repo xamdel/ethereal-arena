@@ -14,7 +14,7 @@ export interface StartingCardData {
  */
 export interface LLMCharacterOutput {
   fullBodyPrompt: string; // Prompt for the full-body character image + background
-  facialPortraitPrompt: string; // Prompt for the character's facial portrait
+  // facialPortraitPrompt: string; // Removed: Prompt for the character's facial portrait
   descriptionAndBackstory: string; // Paragraph describing the character
   classFeatures: string[]; // Array of 3 strings detailing class features/playstyle
   startingCards: StartingCardData[]; // Array of starting cards (typically 3-5)
@@ -31,10 +31,10 @@ export interface CharacterGenerationRequest {
  * Represents the final character data sent from the server to the client,
  * including generated text and image URLs.
  */
-export interface CharacterData extends Omit<LLMCharacterOutput, 'fullBodyPrompt' | 'facialPortraitPrompt' | 'startingCards'> {
+export interface CharacterData extends Omit<LLMCharacterOutput, 'fullBodyPrompt' | 'startingCards'> { // Removed facialPortraitPrompt from Omit
   className: string; // The class name used for generation
   fullBodyImageUrl: string; // URL of the generated full-body image
-  facialPortraitImageUrl: string; // URL of the generated facial portrait image
+  // facialPortraitImageUrl: string; // Removed: URL of the generated facial portrait image
   // Starting cards with art URLs instead of prompts; includes cost property inherited from StartingCardData via Omit
   startingCards: (Omit<StartingCardData, 'artPrompt'> & { artUrl: string })[];
 }

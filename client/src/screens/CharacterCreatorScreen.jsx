@@ -16,11 +16,25 @@ function CharacterCreatorScreen() {
   const [error, setError] = useState(null);
   const [isInfoViewActive, setIsInfoViewActive] = useState(true); // State for carousel view
   const scrollTimeoutRef = useRef(null); // Ref for debounce timer
+  
+  // Performance timing refs
+  const timingRef = useRef({
+    generationStart: null,
+    dataReceived: null,
+    imagesStartLoading: null,
+    imagesFinished: null
+  });
+
 
   // Setup socket listeners
   useEffect(() => {
     const handleCharacterGenerated = (data) => {
+      timingRef.current.dataReceived = performance.now();
+      const generationTime = timingRef.current.dataReceived - timingRef.current.generationStart;
+      
       console.log('[Socket Event] characterGenerated received:', data);
+      console.log(`[Performance] Character generation completed in ${generationTime.toFixed(2)}ms`);
+      
       setCharacterData(data);
       setIsLoading(false);
       setError(null);
@@ -73,6 +87,16 @@ function CharacterCreatorScreen() {
       setError('Please enter a class name.');
       return;
     }
+    
+    // Reset and start timing
+    timingRef.current = {
+      generationStart: performance.now(),
+      dataReceived: null,
+      imagesStartLoading: null,
+      imagesFinished: null
+    };
+    console.log(`[Performance] Starting character generation for: ${className}`);
+    
     setError(null);
     setIsLoading(true);
     setCharacterData(null); // Clear previous data
@@ -104,13 +128,13 @@ function CharacterCreatorScreen() {
           </button>
         </div>
         {error && <p className={styles.errorMessage}>{error}</p>}
-        {/* Loading indicator can stay in top section or move, let's keep it here for now */}
+        {/* Enhanced loading indicator with progress */}
         {isLoading && !characterData && <div className={styles.loadingIndicator}>Generating character... please wait.</div>}
       </div>
 
       {/* Main Content Area - Attach wheel listener here */}
       <div className={styles.mainContentArea} onWheel={handleWheelScroll}>
-        {/* Fixed Background Image - Rendered only when data exists */}
+        {/* Fixed Background Image - Rendered only when all images are loaded */}
         {characterData && (
           <div className={styles.fixedBackground}>
             <CharacterImageDisplay
@@ -121,9 +145,8 @@ function CharacterCreatorScreen() {
           </div>
         )}
 
-        {/* Carousel Content Area - Replaces Scroll Container */}
-        {/* Render content only when not initially loading OR when data is present */}
-        {(characterData || !isLoading) && characterData && (
+        {/* Carousel Content Area - Only render when all images are loaded */}
+        {characterData && (
           <div
             className={`${styles.carouselContent} ${
               !isInfoViewActive ? styles.cardsViewActive : ''
@@ -132,14 +155,14 @@ function CharacterCreatorScreen() {
             {/* Info Cards Section */}
             <div className={styles.infoCardsSection}>
               <InfoCard
-                title="Description & Backstory"
+                title="Overview"
                 content={characterData.descriptionAndBackstory}
               />
               <InfoCard
                 title="Class Features"
                 content={characterData.classFeatures}
-                imageUrl={characterData.facialPortraitImageUrl}
-                imageAlt={`${characterData.className} facial portrait`}
+                // imageUrl={characterData.facialPortraitImageUrl} // Removed
+                // imageAlt={`${characterData.className} facial portrait`} // Removed
               />
             </div>
 

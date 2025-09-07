@@ -88,6 +88,12 @@
   min-height: 1.2em; /* Reserve space */
 }
 
+.errorHint {
+  color: #ff6b6b;
+  font-size: 0.9em;
+  margin-left: 0.5em;
+}
+
 
 /* Main Content Area - Fills remaining space */
 .mainContentArea {
@@ -106,22 +112,17 @@
   height: 100%; /* Fill the mainContentArea */
   z-index: 1; /* Behind scroll container */
   overflow: hidden;
+  /* Add a background color for debugging if needed */
+  /* background-color: rgba(255, 0, 0, 0.2); */
 }
 
-/* Ensure CharacterImageDisplay component fills the background */
-.fixedBackground > div {
-  position: absolute; /* Should already be handled by component? Verify */
-  top: 0; /* Redundant if component handles it */
-  left: 0; /* Redundant if component handles it */
-  width: 100%;
-  height: 100%;
-  /* Ensure component styles allow covering */
-}
-
+/* This rule should target the image rendered by CharacterImageDisplay */
 .fixedBackground img { /* Target image directly if needed */
-  object-fit: cover !important;
+  display: block; /* Ensure it's a block element */
   width: 100%;
   height: 100%;
+  object-fit: cover; /* Cover the container, maintain aspect ratio */
+  object-position: center; /* Center the image within the element */
 }
 
 /* Carousel Content Area - Container for animated sections */
@@ -160,8 +161,8 @@
 /* Wrapper for the starting cards section */
 .startingCardsSectionWrapper {
   position: absolute; /* Position within carouselContent */
-  width: calc(100% - 16vw); /* Account for parent padding */
-  left: 8vw; /* Align with parent padding */
+  width: 100%; /* Span full width of parent */
+  left: 0; /* Align with parent edge */
   top: 0; /* Start positioning from the top */
   /* Initial position (Info View - partially visible) */
   /* Adjust this value carefully to show ~20% */
